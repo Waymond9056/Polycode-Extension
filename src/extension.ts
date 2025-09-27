@@ -29,6 +29,12 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for text document changes to create CRDT updates for ALL files
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
+      // Only process events with actual content changes
+      if (event.contentChanges.length === 0) {
+        console.log("Skipping document change event with no content changes");
+        return;
+      }
+
       // Send changes for any file in the workspace to enable synchronous collaboration
       console.log(
         "Text document changed in file:",

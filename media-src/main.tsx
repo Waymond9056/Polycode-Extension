@@ -144,25 +144,19 @@ function App() {
       }
       if (message.type === "crdtUpdate") {
         console.log("CRDT Update received:", message.update);
+        console.log("autoSyncRef.current:", autoSyncRef.current);
+        setCrdtUpdates((prev) => [message.update, ...prev.slice(0, 9)]); // Keep last 10 updates
 
-        // Only process updates that have actual content changes
-        if (message.update.updates && message.update.updates.length > 0) {
-          console.log("autoSyncRef.current:", autoSyncRef.current);
-          setCrdtUpdates((prev) => [message.update, ...prev.slice(0, 9)]); // Keep last 10 updates
-
-          // Add to pending updates if auto-sync is enabled
-          if (autoSyncRef.current) {
-            console.log("Adding to pending updates");
-            setPendingUpdates((prev) => {
-              const newUpdates = [...prev, message.update];
-              pendingUpdatesRef.current = newUpdates; // Update ref
-              return newUpdates;
-            });
-          } else {
-            console.log("Auto-sync not enabled, not adding to pending");
-          }
+        // Add to pending updates if auto-sync is enabled
+        if (autoSyncRef.current) {
+          console.log("Adding to pending updates");
+          setPendingUpdates((prev) => {
+            const newUpdates = [...prev, message.update];
+            pendingUpdatesRef.current = newUpdates; // Update ref
+            return newUpdates;
+          });
         } else {
-          console.log("Skipping empty CRDT update");
+          console.log("Auto-sync not enabled, not adding to pending");
         }
       }
       if (message.type === "p2pStatus") {
