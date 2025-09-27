@@ -185,6 +185,78 @@ function App() {
       <h3 style={{ marginTop: 0 }}>
         {flavor === "sidebar" ? "Polycode Sidebar" : "Polycode Panel"}
       </h3>
+
+      {/* Icon buttons row */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          justifyContent: "center",
+        }}
+      >
+        <VSCodeButton
+          onClick={() =>
+            vscode.postMessage({
+              type: "executeShell",
+              script: "bash github_utils/save.sh",
+            })
+          }
+          appearance="secondary"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+          }}
+          title="Save"
+        >
+          💾
+        </VSCodeButton>
+        <VSCodeButton
+          onClick={() =>
+            vscode.postMessage({
+              type: "runCommand",
+              command: "workbench.action.debug.start",
+            })
+          }
+          appearance="secondary"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+          }}
+          title="Run"
+        >
+          ▶️
+        </VSCodeButton>
+        <VSCodeButton
+          onClick={() =>
+            vscode.postMessage({
+              type: "runCommand",
+              command: "workbench.action.openSettings",
+            })
+          }
+          appearance="secondary"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+          }}
+          title="Settings"
+        >
+          ⚙️
+        </VSCodeButton>
+      </div>
+
       <div style={{ display: "grid", gap: 8 }}>
         <VSCodeTextField
           value={text}

@@ -194,6 +194,11 @@ export class P2PUser {
     console.log("Broadcasted CRDT update to P2P network");
   }
 
+  async broadcastMessage(message: any): Promise<void> {
+    console.log("Broadcasting message to swarm:", message);
+    await this.broadcastToSwarm(message);
+  }
+
   async saveToGitHub(
     commitMessage: string = "Auto-save from Polycode P2P"
   ): Promise<boolean> {
@@ -270,6 +275,10 @@ export class P2PUser {
 
       case "p2p_pong":
         await this.handlePong(message as P2PPongMessage);
+        break;
+
+      case "syncRequest":
+        await this.handleSyncRequest(message as any);
         break;
 
       default:
@@ -439,5 +448,33 @@ export class P2PUser {
     vscode.window.showInformationMessage(
       `P2P Connection: ${message.clientId} responded (${latency}ms latency)`
     );
+  }
+
+  private async handleSyncRequest(message: any): Promise<void> {
+    console.log("Received sync request from peer:", message.message);
+
+    // Show notification to user
+    vscode.window.showInformationMessage(
+      `Sync request received: ${message.message}`
+    );
+
+    // Execute sync.sh script in the EDH
+    const { exec } = require("child_process");
+    const syncScript = "bash sync.sh"; // This will run in the EDH environment
+
+    console.log(`Executing sync script: ${syncScript}`);
+
+    exec(syncScript, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        console.error(`Error executing sync script: ${error}`);
+        vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+        return;
+      }
+      if (stderr) {
+        console.log(`Sync stderr: ${stderr}`);
+      }
+      console.log(`Sync stdout: ${stdout}`);
+      vscode.window.showInformationMessage(`Workspace synced successfully`);
+    });
   }
 }
