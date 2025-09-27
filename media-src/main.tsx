@@ -71,6 +71,14 @@ function App() {
     });
   };
 
+  const sendTestMessage = () => {
+    console.log("Sending test message like the working example");
+    vscode.postMessage({
+      type: "sendTestMessage",
+      message: "I LOVE YOU",
+    });
+  };
+
   const applyCRDTUpdates = () => {
     console.log(
       "applyCRDTUpdates called, pendingUpdates:",
@@ -407,6 +415,13 @@ function App() {
             style={{ marginBottom: 8 }}
           >
             Ping Peers
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={sendTestMessage}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Send Test Message
           </VSCodeButton>
         </div>
       </div>

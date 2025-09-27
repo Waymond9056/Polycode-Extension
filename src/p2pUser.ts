@@ -41,11 +41,17 @@ export class P2PUser {
   private topic: Buffer;
   private isStarted: boolean = false;
   private clientId: string;
+  private isServer: boolean = false;
 
-  constructor(topicName: string = "polycode-collaboration", clientId?: string) {
+  constructor(
+    topicName: string = "polycode",
+    clientId?: string,
+    isServer: boolean = false
+  ) {
     this.swarm = new Hyperswarm();
     this.topic = Buffer.alloc(32).fill(topicName); // A topic must be 32 bytes
     this.clientId = clientId || this.generateClientId();
+    this.isServer = isServer;
     this.setupSwarm();
   }
 
@@ -58,12 +64,25 @@ export class P2PUser {
 
   private setupSwarm(): void {
     this.swarm.on("connection", (conn: any, info: any) => {
-      console.log("New P2P connection established");
+      console.log(
+        "New P2P connection established with peer:",
+        info.peer?.toString("hex")?.substring(0, 16) || "unknown"
+      );
+      console.log("Total peers now:", this.swarm.peers.length);
 
       conn.on("data", async (data: Buffer) => {
         try {
-          const message: P2PMessage = JSON.parse(data.toString());
-          await this.handleMessage(message);
+          const messageStr = data.toString();
+          console.log("Received raw message:", messageStr);
+
+          // Try to parse as JSON message
+          try {
+            const message: P2PMessage = JSON.parse(messageStr);
+            await this.handleMessage(message);
+          } catch (parseError) {
+            // If not JSON, treat as plain text (like the working example)
+            console.log("Received plain text message:", messageStr);
+          }
         } catch (error) {
           console.error("Error handling P2P message:", error);
         }
@@ -74,7 +93,10 @@ export class P2PUser {
       });
 
       conn.on("close", () => {
-        console.log("P2P connection closed");
+        console.log(
+          "P2P connection closed. Remaining peers:",
+          this.swarm.peers.length
+        );
       });
     });
 
@@ -90,13 +112,23 @@ export class P2PUser {
     }
 
     try {
-      const discovery = this.swarm.join(this.topic, {
-        server: true,
-        client: true,
-      });
-      await discovery.flushed();
+      if (this.isServer) {
+        // Server mode: only server, no client (like first.js)
+        console.log("Starting as P2P server...");
+        const discovery = this.swarm.join(this.topic, {
+          server: true,
+          client: false,
+        });
+        await discovery.flushed(); // Waits for the topic to be fully announced on the DHT
+        console.log("P2P Server is running and waiting for connections...");
+      } else {
+        // Client mode: both server and client (like second.js)
+        console.log("Starting as P2P client...");
+        this.swarm.join(this.topic, { server: true, client: true });
+        await this.swarm.flush(); // Waits for the swarm to connect to pending peers
+        console.log("P2P Client started and connecting to peers...");
+      }
       this.isStarted = true;
-      console.log("P2P User started and listening for connections...");
     } catch (error) {
       console.error("Error starting P2P user:", error);
       throw error;
@@ -288,6 +320,20 @@ export class P2PUser {
 
     await this.broadcastToSwarm(pingMessage);
     console.log("Pinged all peers with message:", pingMessage.message);
+  }
+
+  async sendTestMessage(message: string = "I LOVE YOU"): Promise<void> {
+    console.log("Sending test message:", message);
+
+    // Send to all connected peers (like the working example)
+    for (const peer of this.swarm.peers) {
+      try {
+        peer.write(message);
+        console.log("Sent test message to peer");
+      } catch (error) {
+        console.error("Error sending test message to peer:", error);
+      }
+    }
   }
 
   private async handlePing(message: P2PPingMessage): Promise<void> {
