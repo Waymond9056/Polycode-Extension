@@ -16,6 +16,7 @@ export interface CRDTUpdateMessage extends P2PMessage {
   type: "crdt_update";
   document: string;
   updates: any[];
+  clientId?: string;
 }
 
 export interface GitHubSaveMessage extends P2PMessage {
@@ -185,6 +186,7 @@ export class P2PUser {
       timestamp: Date.now(),
       document: crdtUpdate.document,
       updates: crdtUpdate.updates,
+      clientId: crdtUpdate.clientId, // Include client ID to prevent echo
       peerId: this.swarm.peerId ? this.swarm.peerId.toString("hex") : "unknown",
     };
 
