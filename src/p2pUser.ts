@@ -46,6 +46,9 @@ export class P2PUser {
   private isStarted: boolean = false;
   private clientId: string;
   private connections: any[] = []; // Store actual connection objects
+  private peerClientIds: Map<string, string> = new Map(); // Map connection to client ID
+  private peerUserNames: Map<string, string> = new Map(); // Map connection to user name
+  private userName: string = ""; // Current user's display name
   private applyCRDTUpdatesToFile: (updates: any[]) => Promise<void>;
   private seenMessages: Set<string> = new Set(); // Track seen messages to prevent loops
   private messageHistory: Map<string, number> = new Map(); // Track message timestamps for cleanup
@@ -220,6 +223,16 @@ export class P2PUser {
     console.log("Broadcasted CRDT update to P2P network");
   }
 
+  async broadcastMessage(message: any): Promise<void> {
+    console.log("Broadcasting message to swarm:", message);
+    await this.broadcastToSwarm(message);
+  }
+
+  async identifyPeers(): Promise<void> {
+    // Send a ping to help identify peers and get their client IDs
+    await this.pingPeers("Peer identification ping");
+  }
+
   async saveToGitHub(
     commitMessage: string = "Auto-save from Polycode P2P"
   ): Promise<boolean> {
@@ -282,7 +295,7 @@ export class P2PUser {
 
   private async handleMessage(message: P2PMessage, senderConnection?: any): Promise<void> {
     console.log("Received P2P message:", message);
-
+    
     // Check if we've already seen this message to prevent loops
     if (message.messageId && this.seenMessages.has(message.messageId)) {
       console.log("Ignoring duplicate message:", message.messageId);
@@ -301,6 +314,32 @@ export class P2PUser {
       return;
     }
 
+    // Track client ID from any message that contains it
+    if (message.clientId) {
+      const connectionKey = this.getConnectionKey(message);
+      if (connectionKey) {
+        this.peerClientIds.set(connectionKey, message.clientId);
+        console.log(
+          `Tracked client ID: ${message.clientId} for connection ${connectionKey}`
+        );
+      }
+    }
+
+    // Track user name from userNameUpdate messages
+    if (message.type === "userNameUpdate" && (message as any).userName) {
+      const connectionKey = this.getConnectionKey(message);
+      if (connectionKey) {
+        this.peerUserNames.set(connectionKey, (message as any).userName);
+        console.log(
+          `Tracked user name: ${
+            (message as any).userName
+          } for connection ${connectionKey}`
+        );
+      }
+    }
+
+    
+
     // Process the message locally
     switch (message.type) {
       case "crdt_update":
@@ -317,6 +356,10 @@ export class P2PUser {
 
       case "p2p_pong":
         await this.handlePong(message as P2PPongMessage);
+        break;
+
+      case "syncRequest":
+        await this.handleSyncRequest(message as any);
         break;
 
       default:
@@ -417,6 +460,44 @@ export class P2PUser {
 
   getPeerId(): string | undefined {
     return this.swarm.peerId ? this.swarm.peerId.toString("hex") : undefined;
+  }
+
+  private getConnectionKey(message: P2PMessage): string | null {
+    // Try to find the connection that sent this message
+    // This is a simplified approach - in a real implementation, you'd need to track which connection sent which message
+    for (let i = 0; i < this.connections.length; i++) {
+      const conn = this.connections[i];
+      const key = conn.remotePublicKey
+        ? conn.remotePublicKey.toString("hex")
+        : `conn_${i}`;
+      return key;
+    }
+    return null;
+  }
+
+  setUserName(userName: string): void {
+    this.userName = userName;
+    console.log(`User name set to: ${userName}`);
+  }
+
+  getConnectedPeers(): any[] {
+    // Return peer info with user names if available, otherwise client IDs
+    return this.connections.map((conn, index) => {
+      const connectionKey = conn.remotePublicKey
+        ? conn.remotePublicKey.toString("hex")
+        : `conn_${index}`;
+      const clientId = this.peerClientIds.get(connectionKey) || `peer_${index}`;
+      const userName = this.peerUserNames.get(connectionKey) || clientId;
+
+      return {
+        id: `peer_${index}`,
+        clientId: clientId,
+        userName: userName,
+        peerId: conn.remotePublicKey
+          ? conn.remotePublicKey.toString("hex").substring(0, 8)
+          : `peer_${index}`,
+      };
+    });
   }
 
   isConnected(): boolean {
@@ -526,5 +607,39 @@ export class P2PUser {
     vscode.window.showInformationMessage(
       `P2P Connection: ${message.clientId} responded (${latency}ms latency)`
     );
+  }
+
+  private async handleSyncRequest(message: any): Promise<void> {
+    console.log("Received sync request from peer:", message.message);
+
+    // Show notification to user
+    vscode.window.showInformationMessage(
+      `Sync request received: ${message.message}`
+    );
+
+    // Execute git commands directly in terminal
+    const { exec } = require("child_process");
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage("No workspace folder found for sync");
+      return;
+    }
+
+    const syncCommands = `cd "${workspaceRoot}" && git add * && git commit -m "Updating..." && git pull --rebase`;
+    console.log(`Executing sync commands: ${syncCommands}`);
+
+    exec(syncCommands, (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        console.error(`Error executing sync commands: ${error}`);
+        vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+        return;
+      }
+      if (stderr) {
+        console.log(`Sync stderr: ${stderr}`);
+      }
+      console.log(`Sync stdout: ${stdout}`);
+      vscode.window.showInformationMessage(`Workspace synced successfully`);
+    });
   }
 }

@@ -28,6 +28,13 @@ function App() {
   const autoSyncRef = React.useRef<boolean>(false);
   const pendingUpdatesRef = React.useRef<any[]>([]);
   const [p2pStatus, setP2pStatus] = React.useState<any>(null);
+  const [currentPage, setCurrentPage] = React.useState<
+    "main" | "save" | "settings"
+  >("main");
+  const [commitTitle, setCommitTitle] = React.useState<string>("Saving");
+  const [commitMessage, setCommitMessage] = React.useState<string>("");
+  const [connectedUsers, setConnectedUsers] = React.useState<string[]>([]);
+  const [userName, setUserName] = React.useState<string>("");
   const [pingMessage, setPingMessage] = React.useState<string>(
     "Hello from " + Math.random().toString(36).substring(2, 8)
   );
@@ -61,6 +68,39 @@ function App() {
   const testP2PConnection = () => {
     console.log("Testing P2P connection...");
     vscode.postMessage({ type: "getP2PStatus" });
+  };
+
+  const navigateToSavePage = () => {
+    setCurrentPage("save");
+  };
+
+  const navigateToMain = () => {
+    setCurrentPage("main");
+  };
+
+  const navigateToSettings = () => {
+    setCurrentPage("settings");
+  };
+
+  const saveUserName = () => {
+    // Save the user name and broadcast it to peers
+    vscode.postMessage({
+      type: "setUserName",
+      userName: userName,
+    });
+    setCurrentPage("main");
+  };
+
+  const executeSave = () => {
+    const fullMessage = commitMessage
+      ? `${commitTitle}: ${commitMessage}`
+      : commitTitle;
+    const script = `git checkout -b Saving && git add * && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
+    vscode.postMessage({
+      type: "executeShell",
+      script: script,
+    });
+    setCurrentPage("main"); // Navigate back to main after executing
   };
 
   const pingPeers = () => {
@@ -162,6 +202,20 @@ function App() {
       if (message.type === "p2pStatus") {
         console.log("P2P Status received:", message);
         setP2pStatus(message);
+
+        // Extract connected users from P2P status
+        if (message.peers && Array.isArray(message.peers)) {
+          const userList = message.peers.map(
+            (peer: any) =>
+              peer.userName || peer.clientId || peer.peerId || "Unknown User"
+          );
+          setConnectedUsers(userList);
+        } else if (message.peerCount > 0) {
+          // If we have peer count but no detailed peer info, show generic users
+          setConnectedUsers(Array(message.peerCount).fill("Connected User"));
+        } else {
+          setConnectedUsers([]);
+        }
       }
     };
 
@@ -180,136 +234,83 @@ function App() {
     };
   }, []);
 
-  return (
+  // Periodically request P2P status to keep connected users updated
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      vscode.postMessage({ type: "getP2PStatus" });
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const renderMainPage = () => (
     <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
       <h3 style={{ marginTop: 0 }}>
         {flavor === "sidebar" ? "Polycode Sidebar" : "Polycode Panel"}
       </h3>
-      <div style={{ display: "grid", gap: 8 }}>
-        <VSCodeTextField
-          value={text}
-          onInput={(e: any) => setText(e.target.value)}
-          placeholder="Type something..."
-        />
-        <VSCodeButton onClick={() => toast(`Hello from ${text}!`)}>
-          Say
-        </VSCodeButton>
-        <VSCodeButton onClick={runFormat} appearance="secondary">
-          Format Document
+
+      {/* Icon buttons row */}
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          marginBottom: 16,
+          justifyContent: "center",
+        }}
+      >
+        <VSCodeButton
+          onClick={navigateToSavePage}
+          appearance="secondary"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+          }}
+          title="Save"
+        >
+          💾
         </VSCodeButton>
         <VSCodeButton
           onClick={() =>
             vscode.postMessage({
               type: "runCommand",
-              command: "polycode.openPanel",
+              command: "workbench.action.debug.start",
             })
           }
-        >
-          Open Panel
-        </VSCodeButton>
-        <VSCodeButton onClick={() => insertText("hello")}>
-          WRITE HI
-        </VSCodeButton>
-
-        <div
+          appearance="secondary"
           style={{
-            border: "1px solid var(--vscode-widget-border)",
-            padding: 8,
-            borderRadius: 4,
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
           }}
+          title="Run"
         >
-          <h4 style={{ margin: "0 0 8px 0" }}>CRDT Sync:</h4>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={autoSync}
-              onChange={(e) => {
-                setAutoSync(e.target.checked);
-                autoSyncRef.current = e.target.checked;
-                if (e.target.checked) {
-                  // Clear pending updates when starting auto-sync
-                  setPendingUpdates([]);
-                  pendingUpdatesRef.current = [];
-                }
-              }}
-              style={{ margin: 0 }}
-            />
-            <label
-              style={{ fontSize: "0.9em", color: "var(--vscode-foreground)" }}
-            >
-              Auto-sync every 0.25s
-            </label>
-          </div>
-          {autoSync && (
-            <div
-              style={{
-                fontSize: "0.8em",
-                color: "var(--vscode-descriptionForeground)",
-                marginBottom: 8,
-                padding: 4,
-                background: "var(--vscode-inputValidation-infoBackground)",
-                border: "1px solid var(--vscode-inputValidation-infoBorder)",
-                borderRadius: 4,
-              }}
-            >
-              Auto-sync is active. Changes will be automatically applied to the
-              correct files every 0.25 seconds.
-            </div>
-          )}
-        </div>
-
-        <div
+          ▶️
+        </VSCodeButton>
+        <VSCodeButton
+          onClick={navigateToSettings}
+          appearance="secondary"
           style={{
-            border: "1px solid var(--vscode-widget-border)",
-            padding: 8,
-            borderRadius: 4,
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
           }}
+          title="Settings"
         >
-          <h4 style={{ margin: "0 0 8px 0" }}>Current Editor Content:</h4>
-          <VSCodeButton
-            onClick={getEditorContent}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Refresh Content
-          </VSCodeButton>
-          <VSCodeButton
-            onClick={testConnection}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Test Connection
-          </VSCodeButton>
-          <VSCodeButton
-            onClick={testP2PConnection}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Test P2P Status
-          </VSCodeButton>
-          <div
-            style={{
-              fontFamily: "var(--vscode-editor-font-family)",
-              fontSize: "var(--vscode-editor-font-size)",
-              background: "var(--vscode-editor-background)",
-              padding: 8,
-              borderRadius: 4,
-              maxHeight: 200,
-              overflow: "auto",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {editorContent}
-          </div>
-        </div>
+          ⚙️
+        </VSCodeButton>
+      </div>
 
+      <div style={{ display: "grid", gap: 8 }}>
         <div
           style={{
             border: "1px solid var(--vscode-widget-border)",
@@ -433,9 +434,176 @@ function App() {
             Send Response
           </VSCodeButton>
         </div>
+
+        {/* Connected Users Display */}
+        <div
+          style={{
+            border: "1px solid var(--vscode-widget-border)",
+            padding: 8,
+            borderRadius: 4,
+            marginTop: 16,
+          }}
+        >
+          <h4 style={{ margin: "0 0 8px 0" }}>
+            Connected Users ({connectedUsers.length}):
+          </h4>
+          <div
+            style={{
+              fontFamily: "var(--vscode-editor-font-family)",
+              fontSize: "0.9em",
+              background: "var(--vscode-editor-background)",
+              padding: 8,
+              borderRadius: 4,
+              minHeight: "60px",
+              maxHeight: "120px",
+              overflow: "auto",
+              border: "1px solid var(--vscode-widget-border)",
+            }}
+          >
+            {connectedUsers.length === 0 ? (
+              <div
+                style={{
+                  color: "var(--vscode-descriptionForeground)",
+                  fontStyle: "italic",
+                }}
+              >
+                No users connected
+              </div>
+            ) : (
+              connectedUsers.map((user, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: "2px 4px",
+                    marginBottom: 2,
+                    borderRadius: 3,
+                    backgroundColor:
+                      "var(--vscode-inputValidation-infoBackground)",
+                    color: "var(--vscode-inputValidation-infoForeground)",
+                  }}
+                >
+                  👤 {user}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
+
+  const renderSavePage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>Save Changes</h3>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Commit Title:
+          </label>
+          <VSCodeTextField
+            value={commitTitle}
+            onInput={(e: any) => setCommitTitle(e.target.value)}
+            placeholder="Enter commit title..."
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Commit Message:
+          </label>
+          <textarea
+            value={commitMessage}
+            onChange={(e: any) => setCommitMessage(e.target.value)}
+            placeholder="Enter commit message..."
+            style={{
+              width: "100%",
+              minHeight: "80px",
+              padding: "8px",
+              border: "1px solid var(--vscode-input-border)",
+              borderRadius: "4px",
+              backgroundColor: "var(--vscode-input-background)",
+              color: "var(--vscode-input-foreground)",
+              fontFamily: "var(--vscode-font-family)",
+              fontSize: "var(--vscode-font-size)",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <VSCodeButton onClick={navigateToMain} appearance="secondary">
+            Cancel
+          </VSCodeButton>
+          <VSCodeButton onClick={executeSave} appearance="primary">
+            💾 Commit & Save
+          </VSCodeButton>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderSettingsPage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <VSCodeButton
+          onClick={navigateToMain}
+          appearance="secondary"
+          style={{ marginRight: 8, padding: "4px 8px" }}
+        >
+          ← Back
+        </VSCodeButton>
+        <h3 style={{ margin: 0 }}>Settings</h3>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Your Display Name:
+          </label>
+          <VSCodeTextField
+            value={userName}
+            onInput={(e: any) => setUserName(e.target.value)}
+            placeholder="Enter your name..."
+            style={{ width: "100%" }}
+          />
+          <div
+            style={{
+              fontSize: "0.8em",
+              color: "var(--vscode-descriptionForeground)",
+              marginTop: 4,
+            }}
+          >
+            This name will be shown to other connected users
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <VSCodeButton onClick={navigateToMain} appearance="secondary">
+            Cancel
+          </VSCodeButton>
+          <VSCodeButton onClick={saveUserName} appearance="primary">
+            💾 Save Name
+          </VSCodeButton>
+        </div>
+      </div>
+    </div>
+  );
+
+  return currentPage === "main"
+    ? renderMainPage()
+    : currentPage === "save"
+    ? renderSavePage()
+    : renderSettingsPage();
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

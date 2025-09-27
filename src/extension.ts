@@ -150,6 +150,54 @@ function hookMessages(
     if (msg?.type === "runCommand" && typeof msg.command === "string") {
       vscode.commands.executeCommand(msg.command);
     }
+    if (msg?.type === "setUserName" && typeof msg.userName === "string") {
+      // Store the user name and broadcast it to peers
+      if (p2pUser) {
+        p2pUser.setUserName(msg.userName);
+        p2pUser.broadcastMessage({
+          type: "userNameUpdate",
+          userName: msg.userName,
+          clientId: p2pUser.getClientId(),
+          timestamp: Date.now(),
+        });
+      }
+    }
+    if (msg?.type === "executeShell" && typeof msg.script === "string") {
+      const { exec } = require("child_process");
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage("No workspace folder found");
+        return;
+      }
+
+      const fullScript = `cd "${workspaceRoot}" && ${msg.script}`;
+      console.log(`Executing: ${fullScript}`);
+
+      exec(fullScript, (error: any, stdout: string, stderr: string) => {
+        if (error) {
+          console.error(`Error executing shell command: ${error}`);
+          vscode.window.showErrorMessage(`Error: ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.log(`stderr: ${stderr}`);
+        }
+        console.log(`stdout: ${stdout}`);
+        vscode.window.showInformationMessage(
+          `Shell command executed successfully`
+        );
+
+        // If this was a save command, notify other peers to sync
+        if (msg.script.includes("git checkout -b Saving") && p2pUser) {
+          console.log("Save completed, notifying peers to sync...");
+          p2pUser.broadcastMessage({
+            type: "syncRequest",
+            message: "Please sync your workspace",
+            timestamp: Date.now(),
+          });
+        }
+      });
+    }
     if (msg?.type === "testConnection") {
       console.log("Test connection received");
       webview.postMessage({
@@ -244,12 +292,16 @@ function hookMessages(
       });
     }
     if (msg?.type === "getP2PStatus" && p2pUser) {
+      // Send a ping to help identify peers
+      p2pUser.identifyPeers().catch(console.error);
+
       webview.postMessage({
         type: "p2pStatus",
         isConnected: p2pUser.isConnected(),
         peerCount: p2pUser.getPeerCount(),
         peerId: p2pUser.getPeerId(),
         clientId: p2pUser.getClientId(),
+        peers: p2pUser.getConnectedPeers(),
       });
     }
     if (msg?.type === "pingPeers" && p2pUser) {
