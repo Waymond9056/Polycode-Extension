@@ -504,12 +504,30 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
   }
 }
 
+let activeCursorDecorations: vscode.TextEditorDecorationType[] = [];
+
 async function applyCRDTOperation(editor: vscode.TextEditor, operation: any) {
   return new Promise<void>((resolve) => {
     const position = new vscode.Position(
       operation.position.line,
       operation.position.character
     );
+
+    activeCursorDecorations.forEach((d) => {
+      editor.setDecorations(d, []);
+      d.dispose();
+    });
+    activeCursorDecorations = [];
+
+    const decorationType = vscode.window.createTextEditorDecorationType({
+      borderStyle: "solid",
+      borderColor: "red",
+      borderWidth: "1px",
+      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+    });
+
+    editor.setDecorations(decorationType, [new vscode.Range(position, position)]);
+    activeCursorDecorations.push(decorationType);
 
     editor
       .edit((editBuilder) => {

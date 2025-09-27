@@ -9,6 +9,9 @@ export interface P2PMessage {
   type: string;
   timestamp: number;
   peerId?: string;
+  messageId?: string; // Unique message ID for routing
+  forwardedBy?: string; // Client ID that forwarded this message
+  ttl?: number; // Time to live for message forwarding
   [key: string]: any;
 }
 
@@ -47,6 +50,8 @@ export class P2PUser {
   private peerUserNames: Map<string, string> = new Map(); // Map connection to user name
   private userName: string = ""; // Current user's display name
   private applyCRDTUpdatesToFile: (updates: any[]) => Promise<void>;
+  private seenMessages: Set<string> = new Set(); // Track seen messages to prevent loops
+  private messageHistory: Map<string, number> = new Map(); // Track message timestamps for cleanup
 
   constructor(
     topicName: string = "polycode",
@@ -66,6 +71,22 @@ export class P2PUser {
       Math.random().toString(36).substring(2, 15) +
       Math.random().toString(36).substring(2, 15)
     );
+  }
+
+  private generateMessageId(): string {
+    return `${this.clientId}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  }
+
+  private cleanupOldMessages(): void {
+    const now = Date.now();
+    const maxAge = 5 * 60 * 1000; // 5 minutes
+    
+    for (const [messageId, timestamp] of this.messageHistory.entries()) {
+      if (now - timestamp > maxAge) {
+        this.messageHistory.delete(messageId);
+        this.seenMessages.delete(messageId);
+      }
+    }
   }
 
   private setupSwarm(): void {
@@ -89,7 +110,7 @@ export class P2PUser {
           // Try to parse as JSON message
           try {
             const message: P2PMessage = JSON.parse(messageStr);
-            await this.handleMessage(message);
+            await this.handleMessage(message, conn);
           } catch (parseError) {
             // If not JSON, treat as plain text (like the working example)
             console.log("Received plain text message:", messageStr);
@@ -161,6 +182,9 @@ export class P2PUser {
       // Start periodic connection status check
       this.startConnectionStatusCheck();
 
+      // Start periodic message cleanup
+      this.startMessageCleanup();
+
       this.isStarted = true;
     } catch (error) {
       console.error("Error starting P2P user:", error);
@@ -191,6 +215,8 @@ export class P2PUser {
       updates: crdtUpdate.updates,
       clientId: crdtUpdate.clientId, // Include client ID to prevent echo
       peerId: this.swarm.peerId ? this.swarm.peerId.toString("hex") : "unknown",
+      messageId: this.generateMessageId(),
+      ttl: 3, // Allow up to 3 hops
     };
 
     await this.broadcastToSwarm(message);
@@ -231,6 +257,8 @@ export class P2PUser {
         peerId: this.swarm.peerId
           ? this.swarm.peerId.toString("hex")
           : "unknown",
+        messageId: this.generateMessageId(),
+        ttl: 3, // Allow up to 3 hops
       };
 
       await this.broadcastToSwarm(broadcastMessage);
@@ -265,8 +293,26 @@ export class P2PUser {
     }
   }
 
-  private async handleMessage(message: P2PMessage): Promise<void> {
+  private async handleMessage(message: P2PMessage, senderConnection?: any): Promise<void> {
     console.log("Received P2P message:", message);
+    
+    // Check if we've already seen this message to prevent loops
+    if (message.messageId && this.seenMessages.has(message.messageId)) {
+      console.log("Ignoring duplicate message:", message.messageId);
+      return;
+    }
+
+    // Mark message as seen
+    if (message.messageId) {
+      this.seenMessages.add(message.messageId);
+      this.messageHistory.set(message.messageId, Date.now());
+    }
+
+    // Check TTL and decrement if forwarding
+    if (message.ttl !== undefined && message.ttl <= 0) {
+      console.log("Message TTL expired, not forwarding");
+      return;
+    }
 
     // Track client ID from any message that contains it
     if (message.clientId) {
@@ -292,6 +338,9 @@ export class P2PUser {
       }
     }
 
+    
+
+    // Process the message locally
     switch (message.type) {
       case "crdt_update":
         await this.handleCRDTUpdate(message as CRDTUpdateMessage);
@@ -315,6 +364,18 @@ export class P2PUser {
 
       default:
         console.log("Unknown P2P message type:", message.type);
+    }
+
+    // Forward the message to other peers (except the sender)
+    if (message.ttl !== undefined && message.ttl > 0) {
+      const forwardedMessage = {
+        ...message,
+        ttl: message.ttl - 1,
+        forwardedBy: this.clientId
+      };
+      
+      console.log(`Forwarding message ${message.messageId} with TTL ${forwardedMessage.ttl}`);
+      await this.broadcastToSwarm(forwardedMessage, senderConnection);
     }
   }
 
@@ -358,16 +419,31 @@ export class P2PUser {
     }
   }
 
-  private async broadcastToSwarm(message: P2PMessage): Promise<void> {
+  private async broadcastToSwarm(message: P2PMessage, excludeConnection?: any): Promise<void> {
+    // Add message routing metadata if not present
+    if (!message.messageId) {
+      message.messageId = this.generateMessageId();
+    }
+    if (!message.ttl) {
+      message.ttl = 3; // Default TTL of 3 hops
+    }
+
+    // Mark this message as seen to prevent loops
+    this.seenMessages.add(message.messageId);
+    this.messageHistory.set(message.messageId, Date.now());
+
     const messageStr = JSON.stringify(message);
     console.log(
       "Broadcasting message to",
       this.connections.length,
-      "connections"
+      "connections (excluding sender)"
     );
 
-    // Send to all active connections
+    // Send to all active connections except the sender
     for (const conn of this.connections) {
+      if (conn === excludeConnection) {
+        continue; // Don't send back to the sender
+      }
       try {
         console.log("Writing to connection:", typeof conn.write);
         conn.write(messageStr);
@@ -443,6 +519,15 @@ export class P2PUser {
     }, 5000);
   }
 
+  private startMessageCleanup(): void {
+    // Clean up old messages every 2 minutes
+    setInterval(() => {
+      if (this.isStarted) {
+        this.cleanupOldMessages();
+      }
+    }, 2 * 60 * 1000);
+  }
+
   async pingPeers(message?: string): Promise<void> {
     const pingMessage: P2PPingMessage = {
       type: "p2p_ping",
@@ -450,6 +535,8 @@ export class P2PUser {
       clientId: this.clientId,
       message: message || "Ping from " + this.clientId,
       peerId: this.swarm.peerId ? this.swarm.peerId.toString("hex") : "unknown",
+      messageId: this.generateMessageId(),
+      ttl: 3, // Allow up to 3 hops
     };
 
     await this.broadcastToSwarm(pingMessage);
@@ -502,6 +589,8 @@ export class P2PUser {
       originalTimestamp: message.timestamp,
       message: `Pong from ${this.clientId}`,
       peerId: this.swarm.peerId ? this.swarm.peerId.toString("hex") : "unknown",
+      messageId: this.generateMessageId(),
+      ttl: 3, // Allow up to 3 hops
     };
 
     await this.broadcastToSwarm(pongMessage);
