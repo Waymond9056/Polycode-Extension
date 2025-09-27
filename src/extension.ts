@@ -5,6 +5,9 @@ import { randomBytes } from "crypto";
 // Generate a unique client ID for this instance
 const CLIENT_ID = randomBytes(8).toString("hex");
 
+// Flag to prevent infinite loops when applying CRDT updates from P2P
+let isApplyingCRDTUpdate = false;
+
 export function activate(context: vscode.ExtensionContext) {
   console.log("Polycode extension activated with client ID:", CLIENT_ID);
 
@@ -29,6 +32,14 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for text document changes to create CRDT updates for ALL files
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
+      // Skip if we're currently applying a CRDT update to prevent infinite loops
+      if (isApplyingCRDTUpdate) {
+        console.log(
+          "Skipping document change event - currently applying CRDT update"
+        );
+        return;
+      }
+
       // Only process events with actual content changes
       if (event.contentChanges.length === 0) {
         console.log("Skipping document change event with no content changes");
@@ -360,9 +371,13 @@ function createCRDTUpdate(event: vscode.TextDocumentChangeEvent) {
 
 async function applyCRDTUpdatesToFile(updates: any[]) {
   try {
+    // Set flag to prevent infinite loops
+    isApplyingCRDTUpdate = true;
+
     // Extract the document URI from the first update (all updates should be for the same file)
     if (!updates || updates.length === 0) {
       console.error("No updates provided to applyCRDTUpdatesToFile");
+      isApplyingCRDTUpdate = false;
       return;
     }
 
@@ -377,12 +392,14 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
 
     if (filteredUpdates.length === 0) {
       console.log("All CRDT updates filtered out (from same client)");
+      isApplyingCRDTUpdate = false;
       return;
     }
 
     const documentPath = filteredUpdates[0].document;
     if (!documentPath) {
       console.error("No document path found in CRDT updates");
+      isApplyingCRDTUpdate = false;
       return;
     }
 
@@ -429,6 +446,9 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
   } catch (error) {
     console.error("Error applying CRDT updates:", error);
     vscode.window.showErrorMessage(`Failed to apply CRDT updates: ${error}`);
+  } finally {
+    // Always reset the flag to allow future document changes
+    isApplyingCRDTUpdate = false;
   }
 }
 
