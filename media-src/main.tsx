@@ -23,11 +23,14 @@ function App() {
   const [text, setText] = React.useState("Polycode");
   const [editorContent, setEditorContent] = React.useState("No editor content");
   const [crdtUpdates, setCrdtUpdates] = React.useState<any[]>([]);
-  const [syncTarget, setSyncTarget] = React.useState<string>("");
   const [autoSync, setAutoSync] = React.useState<boolean>(false);
   const [pendingUpdates, setPendingUpdates] = React.useState<any[]>([]);
   const autoSyncRef = React.useRef<boolean>(false);
   const pendingUpdatesRef = React.useRef<any[]>([]);
+  const [p2pStatus, setP2pStatus] = React.useState<any>(null);
+  const [pingMessage, setPingMessage] = React.useState<string>(
+    "Hello from " + Math.random().toString(36).substring(2, 8)
+  );
 
   const toast = (t: string) => vscode.postMessage({ type: "toast", text: t });
   const runFormat = () =>
@@ -55,32 +58,52 @@ function App() {
     vscode.postMessage({ type: "testConnection" });
   };
 
+  const testP2PConnection = () => {
+    console.log("Testing P2P connection...");
+    vscode.postMessage({ type: "getP2PStatus" });
+  };
+
+  const pingPeers = () => {
+    console.log("Pinging peers with message:", pingMessage);
+    vscode.postMessage({
+      type: "pingPeers",
+      message: pingMessage,
+    });
+  };
+
+  const sendTestMessage = () => {
+    console.log("Sending test message like the working example");
+    vscode.postMessage({
+      type: "sendTestMessage",
+      message: "I LOVE YOU",
+    });
+  };
+
+  const sendResponseMessage = () => {
+    console.log("Sending response message");
+    vscode.postMessage({
+      type: "sendResponseMessage",
+      message: "I LOVE YOU TOO",
+    });
+  };
+
   const applyCRDTUpdates = () => {
     console.log(
       "applyCRDTUpdates called, pendingUpdates:",
-      pendingUpdatesRef.current.length,
-      "syncTarget:",
-      syncTarget
+      pendingUpdatesRef.current.length
     );
 
     if (pendingUpdatesRef.current.length === 0) {
       console.log("No pending updates to apply");
       return; // No pending updates to apply
     }
-    if (!syncTarget) {
-      console.log("No sync target");
-      return; // No target file
-    }
 
     console.log(
-      "Applying pending CRDT updates to:",
-      syncTarget,
-      "Count:",
+      "Applying pending CRDT updates, Count:",
       pendingUpdatesRef.current.length
     );
     vscode.postMessage({
       type: "applyCRDTUpdates",
-      targetFile: syncTarget,
       updates: pendingUpdatesRef.current,
     });
 
@@ -91,13 +114,8 @@ function App() {
 
   // Auto-sync effect
   React.useEffect(() => {
-    console.log(
-      "Auto-sync effect running, autoSync:",
-      autoSync,
-      "syncTarget:",
-      syncTarget
-    );
-    if (!autoSync || !syncTarget) {
+    console.log("Auto-sync effect running, autoSync:", autoSync);
+    if (!autoSync) {
       return;
     }
 
@@ -110,7 +128,7 @@ function App() {
       console.log("Clearing auto-sync interval");
       clearInterval(interval);
     };
-  }, [autoSync, syncTarget]);
+  }, [autoSync]);
 
   // Listen for messages from the extension using VS Code webview API
   React.useEffect(() => {
@@ -126,26 +144,24 @@ function App() {
       }
       if (message.type === "crdtUpdate") {
         console.log("CRDT Update received:", message.update);
+        console.log("autoSyncRef.current:", autoSyncRef.current);
+        setCrdtUpdates((prev) => [message.update, ...prev.slice(0, 9)]); // Keep last 10 updates
 
-        // Only process updates that have actual content changes
-        if (message.update.updates && message.update.updates.length > 0) {
-          console.log("autoSyncRef.current:", autoSyncRef.current);
-          setCrdtUpdates((prev) => [message.update, ...prev.slice(0, 9)]); // Keep last 10 updates
-
-          // Add to pending updates if auto-sync is enabled
-          if (autoSyncRef.current) {
-            console.log("Adding to pending updates");
-            setPendingUpdates((prev) => {
-              const newUpdates = [...prev, message.update];
-              pendingUpdatesRef.current = newUpdates; // Update ref
-              return newUpdates;
-            });
-          } else {
-            console.log("Auto-sync not enabled, not adding to pending");
-          }
+        // Add to pending updates if auto-sync is enabled
+        if (autoSyncRef.current) {
+          console.log("Adding to pending updates");
+          setPendingUpdates((prev) => {
+            const newUpdates = [...prev, message.update];
+            pendingUpdatesRef.current = newUpdates; // Update ref
+            return newUpdates;
+          });
         } else {
-          console.log("Skipping empty CRDT update");
+          console.log("Auto-sync not enabled, not adding to pending");
         }
+      }
+      if (message.type === "p2pStatus") {
+        console.log("P2P Status received:", message);
+        setP2pStatus(message);
       }
     };
 
@@ -203,12 +219,6 @@ function App() {
           }}
         >
           <h4 style={{ margin: "0 0 8px 0" }}>CRDT Sync:</h4>
-          <VSCodeTextField
-            value={syncTarget}
-            onInput={(e: any) => setSyncTarget(e.target.value)}
-            placeholder="Enter target file path (e.g., sync.txt)"
-            style={{ marginBottom: 8, width: "100%" }}
-          />
           <div
             style={{
               display: "flex",
@@ -249,8 +259,8 @@ function App() {
                 borderRadius: 4,
               }}
             >
-              Auto-sync is active. Changes will be applied to{" "}
-              {syncTarget || "target file"} every 0.25 seconds.
+              Auto-sync is active. Changes will be automatically applied to the
+              correct files every 0.25 seconds.
             </div>
           )}
         </div>
@@ -276,6 +286,13 @@ function App() {
             style={{ marginBottom: 8 }}
           >
             Test Connection
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={testP2PConnection}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Test P2P Status
           </VSCodeButton>
           <div
             style={{
@@ -343,6 +360,78 @@ function App() {
                   </div>
                 ))}
           </div>
+        </div>
+
+        <div
+          style={{
+            border: "1px solid var(--vscode-widget-border)",
+            padding: 8,
+            borderRadius: 4,
+          }}
+        >
+          <h4 style={{ margin: "0 0 8px 0" }}>P2P Connection Test:</h4>
+
+          {p2pStatus && (
+            <div
+              style={{
+                fontSize: "0.9em",
+                marginBottom: 8,
+                padding: 4,
+                background: p2pStatus.isConnected
+                  ? "var(--vscode-inputValidation-infoBackground)"
+                  : "var(--vscode-inputValidation-errorBackground)",
+                border: `1px solid ${
+                  p2pStatus.isConnected
+                    ? "var(--vscode-inputValidation-infoBorder)"
+                    : "var(--vscode-inputValidation-errorBorder)"
+                }`,
+                borderRadius: 4,
+              }}
+            >
+              <strong>Status:</strong>{" "}
+              {p2pStatus.isConnected ? "Connected" : "Not Connected"}
+              <br />
+              <strong>Peer Count:</strong> {p2pStatus.peerCount}
+              <br />
+              <strong>Peer ID:</strong>{" "}
+              {p2pStatus.peerId
+                ? p2pStatus.peerId.substring(0, 16) + "..."
+                : "Unknown"}
+              <br />
+              <strong>Client ID:</strong>{" "}
+              {p2pStatus.clientId
+                ? p2pStatus.clientId.substring(0, 16) + "..."
+                : "Unknown"}
+            </div>
+          )}
+
+          <VSCodeTextField
+            value={pingMessage}
+            onInput={(e: any) => setPingMessage(e.target.value)}
+            placeholder="Enter ping message"
+            style={{ marginBottom: 8, width: "100%" }}
+          />
+          <VSCodeButton
+            onClick={pingPeers}
+            appearance="primary"
+            style={{ marginBottom: 8 }}
+          >
+            Ping Peers
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={sendTestMessage}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Send Test Message
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={sendResponseMessage}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Send Response
+          </VSCodeButton>
         </div>
       </div>
     </div>

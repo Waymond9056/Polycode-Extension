@@ -80,6 +80,12 @@
   },
   "dependencies": {
     "@vscode/webview-ui-toolkit": "^1.4.0",
+    "b4a": "^1.7.3",
+    "bogon": "^1.1.0",
+    "hyperdht": "^6.23.1",
+    "hyperswarm": "^4.14.0",
+    "hyperswarm-proxy-ws": "^1.2.0",
+    "hyperswarm-web": "^2.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }
