@@ -458,15 +458,21 @@ export class P2PUser {
       `Sync request received: ${message.message}`
     );
 
-    // Execute sync.sh script in the EDH
+    // Execute git commands directly in terminal
     const { exec } = require("child_process");
-    const syncScript = "bash sync.sh"; // This will run in the EDH environment
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
-    console.log(`Executing sync script: ${syncScript}`);
+    if (!workspaceRoot) {
+      vscode.window.showErrorMessage("No workspace folder found for sync");
+      return;
+    }
 
-    exec(syncScript, (error: any, stdout: string, stderr: string) => {
+    const syncCommands = `cd "${workspaceRoot}" && git add * && git commit -m "Updating..." && git pull --rebase`;
+    console.log(`Executing sync commands: ${syncCommands}`);
+
+    exec(syncCommands, (error: any, stdout: string, stderr: string) => {
       if (error) {
-        console.error(`Error executing sync script: ${error}`);
+        console.error(`Error executing sync commands: ${error}`);
         vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
         return;
       }

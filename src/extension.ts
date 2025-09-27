@@ -176,7 +176,7 @@ function hookMessages(
         );
 
         // If this was a save command, notify other peers to sync
-        if (msg.script.includes("save.sh") && p2pUser) {
+        if (msg.script.includes("git checkout -b Saving") && p2pUser) {
           console.log("Save completed, notifying peers to sync...");
           p2pUser.broadcastMessage({
             type: "syncRequest",

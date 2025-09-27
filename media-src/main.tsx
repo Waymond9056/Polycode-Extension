@@ -28,6 +28,9 @@ function App() {
   const autoSyncRef = React.useRef<boolean>(false);
   const pendingUpdatesRef = React.useRef<any[]>([]);
   const [p2pStatus, setP2pStatus] = React.useState<any>(null);
+  const [currentPage, setCurrentPage] = React.useState<"main" | "save">("main");
+  const [commitTitle, setCommitTitle] = React.useState<string>("Saving");
+  const [commitMessage, setCommitMessage] = React.useState<string>("");
   const [pingMessage, setPingMessage] = React.useState<string>(
     "Hello from " + Math.random().toString(36).substring(2, 8)
   );
@@ -61,6 +64,26 @@ function App() {
   const testP2PConnection = () => {
     console.log("Testing P2P connection...");
     vscode.postMessage({ type: "getP2PStatus" });
+  };
+
+  const navigateToSavePage = () => {
+    setCurrentPage("save");
+  };
+
+  const navigateToMain = () => {
+    setCurrentPage("main");
+  };
+
+  const executeSave = () => {
+    const fullMessage = commitMessage
+      ? `${commitTitle}: ${commitMessage}`
+      : commitTitle;
+    const script = `git checkout -b Saving && git add * && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
+    vscode.postMessage({
+      type: "executeShell",
+      script: script,
+    });
+    setCurrentPage("main"); // Navigate back to main after executing
   };
 
   const pingPeers = () => {
@@ -180,7 +203,7 @@ function App() {
     };
   }, []);
 
-  return (
+  const renderMainPage = () => (
     <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
       <h3 style={{ marginTop: 0 }}>
         {flavor === "sidebar" ? "Polycode Sidebar" : "Polycode Panel"}
@@ -196,12 +219,7 @@ function App() {
         }}
       >
         <VSCodeButton
-          onClick={() =>
-            vscode.postMessage({
-              type: "executeShell",
-              script: "bash github_utils/save.sh",
-            })
-          }
+          onClick={navigateToSavePage}
           appearance="secondary"
           style={{
             width: "40px",
@@ -508,6 +526,66 @@ function App() {
       </div>
     </div>
   );
+
+  const renderSavePage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>Save Changes</h3>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Commit Title:
+          </label>
+          <VSCodeTextField
+            value={commitTitle}
+            onInput={(e: any) => setCommitTitle(e.target.value)}
+            placeholder="Enter commit title..."
+            style={{ width: "100%" }}
+          />
+        </div>
+
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Commit Message:
+          </label>
+          <textarea
+            value={commitMessage}
+            onChange={(e: any) => setCommitMessage(e.target.value)}
+            placeholder="Enter commit message..."
+            style={{
+              width: "100%",
+              minHeight: "80px",
+              padding: "8px",
+              border: "1px solid var(--vscode-input-border)",
+              borderRadius: "4px",
+              backgroundColor: "var(--vscode-input-background)",
+              color: "var(--vscode-input-foreground)",
+              fontFamily: "var(--vscode-font-family)",
+              fontSize: "var(--vscode-font-size)",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <VSCodeButton onClick={navigateToMain} appearance="secondary">
+            Cancel
+          </VSCodeButton>
+          <VSCodeButton onClick={executeSave} appearance="primary">
+            💾 Commit & Save
+          </VSCodeButton>
+        </div>
+      </div>
+    </div>
+  );
+
+  return currentPage === "main" ? renderMainPage() : renderSavePage();
 }
 
 createRoot(document.getElementById("root")!).render(<App />);
