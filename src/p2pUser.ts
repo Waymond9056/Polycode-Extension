@@ -127,11 +127,26 @@ export class P2PUser {
     try {
       // Both users act as both server and client for bidirectional communication
       console.log("Starting P2P user in bidirectional mode...");
-      this.swarm.join(this.topic, { server: true, client: true });
+      console.log("Topic:", this.topic.toString("hex"));
+      console.log("Client ID:", this.clientId);
+
+      const discovery = this.swarm.join(this.topic, {
+        server: true,
+        client: true,
+      });
+      await discovery.flushed(); // Wait for topic to be announced
+      console.log("Topic announced on DHT");
+
       await this.swarm.flush(); // Waits for the swarm to connect to pending peers
       console.log(
         "P2P User started in bidirectional mode - can send and receive..."
       );
+      console.log("Current peer count:", this.swarm.peers.length);
+      console.log("Current connections:", this.connections.length);
+
+      // Start periodic connection status check
+      this.startConnectionStatusCheck();
+
       this.isStarted = true;
     } catch (error) {
       console.error("Error starting P2P user:", error);
@@ -318,6 +333,17 @@ export class P2PUser {
 
   getClientId(): string {
     return this.clientId;
+  }
+
+  private startConnectionStatusCheck(): void {
+    // Check connection status every 5 seconds
+    setInterval(() => {
+      if (this.isStarted) {
+        console.log(
+          `[Connection Check] Peers: ${this.swarm.peers.length}, Connections: ${this.connections.length}`
+        );
+      }
+    }, 5000);
   }
 
   async pingPeers(message?: string): Promise<void> {
