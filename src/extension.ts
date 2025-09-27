@@ -9,9 +9,8 @@ export function activate(context: vscode.ExtensionContext) {
   console.log("Polycode extension activated with client ID:", CLIENT_ID);
 
   // Initialize P2P User for real-time collaboration
-  // For testing: one user should be server (true), other should be client (false)
-  const isServer = false; // Change this to true for the server user
-  const p2pUser = new P2PUser("polycode", CLIENT_ID, isServer);
+  // Both users can now send and receive messages bidirectionally
+  const p2pUser = new P2PUser("polycode", CLIENT_ID);
   context.subscriptions.push({
     dispose: async () => {
       await p2pUser.stop();
@@ -243,6 +242,12 @@ function hookMessages(
     if (msg?.type === "sendTestMessage" && p2pUser) {
       console.log("Sending test message:", msg.message);
       p2pUser.sendTestMessage(msg.message || "I LOVE YOU").catch(console.error);
+    }
+    if (msg?.type === "sendResponseMessage" && p2pUser) {
+      console.log("Sending response message:", msg.message);
+      p2pUser
+        .sendResponseMessage(msg.message || "I LOVE YOU TOO")
+        .catch(console.error);
     }
   });
 }

@@ -79,6 +79,14 @@ function App() {
     });
   };
 
+  const sendResponseMessage = () => {
+    console.log("Sending response message");
+    vscode.postMessage({
+      type: "sendResponseMessage",
+      message: "I LOVE YOU TOO",
+    });
+  };
+
   const applyCRDTUpdates = () => {
     console.log(
       "applyCRDTUpdates called, pendingUpdates:",
@@ -422,6 +430,13 @@ function App() {
             style={{ marginBottom: 8 }}
           >
             Send Test Message
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={sendResponseMessage}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Send Response
           </VSCodeButton>
         </div>
       </div>
