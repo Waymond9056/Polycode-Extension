@@ -9,7 +9,7 @@ export function activate(context: vscode.ExtensionContext) {
   console.log("Polycode extension activated with client ID:", CLIENT_ID);
 
   // Initialize P2P User for real-time collaboration
-  const p2pUser = new P2PUser();
+  const p2pUser = new P2PUser("polycode-collaboration", CLIENT_ID);
   context.subscriptions.push({
     dispose: async () => {
       await p2pUser.stop();
@@ -231,7 +231,12 @@ function hookMessages(
         isConnected: p2pUser.isConnected(),
         peerCount: p2pUser.getPeerCount(),
         peerId: p2pUser.getPeerId(),
+        clientId: p2pUser.getClientId(),
       });
+    }
+    if (msg?.type === "pingPeers" && p2pUser) {
+      console.log("Pinging peers with message:", msg.message);
+      p2pUser.pingPeers(msg.message || "Test ping").catch(console.error);
     }
   });
 }

@@ -27,6 +27,10 @@ function App() {
   const [pendingUpdates, setPendingUpdates] = React.useState<any[]>([]);
   const autoSyncRef = React.useRef<boolean>(false);
   const pendingUpdatesRef = React.useRef<any[]>([]);
+  const [p2pStatus, setP2pStatus] = React.useState<any>(null);
+  const [pingMessage, setPingMessage] = React.useState<string>(
+    "Hello from " + Math.random().toString(36).substring(2, 8)
+  );
 
   const toast = (t: string) => vscode.postMessage({ type: "toast", text: t });
   const runFormat = () =>
@@ -52,6 +56,19 @@ function App() {
   const testConnection = () => {
     console.log("Testing connection...");
     vscode.postMessage({ type: "testConnection" });
+  };
+
+  const testP2PConnection = () => {
+    console.log("Testing P2P connection...");
+    vscode.postMessage({ type: "getP2PStatus" });
+  };
+
+  const pingPeers = () => {
+    console.log("Pinging peers with message:", pingMessage);
+    vscode.postMessage({
+      type: "pingPeers",
+      message: pingMessage,
+    });
   };
 
   const applyCRDTUpdates = () => {
@@ -131,6 +148,10 @@ function App() {
         } else {
           console.log("Skipping empty CRDT update");
         }
+      }
+      if (message.type === "p2pStatus") {
+        console.log("P2P Status received:", message);
+        setP2pStatus(message);
       }
     };
 
@@ -228,7 +249,8 @@ function App() {
                 borderRadius: 4,
               }}
             >
-              Auto-sync is active. Changes will be automatically applied to the correct files every 0.25 seconds.
+              Auto-sync is active. Changes will be automatically applied to the
+              correct files every 0.25 seconds.
             </div>
           )}
         </div>
@@ -254,6 +276,13 @@ function App() {
             style={{ marginBottom: 8 }}
           >
             Test Connection
+          </VSCodeButton>
+          <VSCodeButton
+            onClick={testP2PConnection}
+            appearance="secondary"
+            style={{ marginBottom: 8 }}
+          >
+            Test P2P Status
           </VSCodeButton>
           <div
             style={{
@@ -321,6 +350,64 @@ function App() {
                   </div>
                 ))}
           </div>
+        </div>
+
+        <div
+          style={{
+            border: "1px solid var(--vscode-widget-border)",
+            padding: 8,
+            borderRadius: 4,
+          }}
+        >
+          <h4 style={{ margin: "0 0 8px 0" }}>P2P Connection Test:</h4>
+
+          {p2pStatus && (
+            <div
+              style={{
+                fontSize: "0.9em",
+                marginBottom: 8,
+                padding: 4,
+                background: p2pStatus.isConnected
+                  ? "var(--vscode-inputValidation-infoBackground)"
+                  : "var(--vscode-inputValidation-errorBackground)",
+                border: `1px solid ${
+                  p2pStatus.isConnected
+                    ? "var(--vscode-inputValidation-infoBorder)"
+                    : "var(--vscode-inputValidation-errorBorder)"
+                }`,
+                borderRadius: 4,
+              }}
+            >
+              <strong>Status:</strong>{" "}
+              {p2pStatus.isConnected ? "Connected" : "Not Connected"}
+              <br />
+              <strong>Peer Count:</strong> {p2pStatus.peerCount}
+              <br />
+              <strong>Peer ID:</strong>{" "}
+              {p2pStatus.peerId
+                ? p2pStatus.peerId.substring(0, 16) + "..."
+                : "Unknown"}
+              <br />
+              <strong>Client ID:</strong>{" "}
+              {p2pStatus.clientId
+                ? p2pStatus.clientId.substring(0, 16) + "..."
+                : "Unknown"}
+            </div>
+          )}
+
+          <VSCodeTextField
+            value={pingMessage}
+            onInput={(e: any) => setPingMessage(e.target.value)}
+            placeholder="Enter ping message"
+            style={{ marginBottom: 8, width: "100%" }}
+          />
+          <VSCodeButton
+            onClick={pingPeers}
+            appearance="primary"
+            style={{ marginBottom: 8 }}
+          >
+            Ping Peers
+          </VSCodeButton>
         </div>
       </div>
     </div>
