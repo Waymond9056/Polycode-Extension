@@ -59,8 +59,9 @@ export class P2PUser {
 
   private setupSwarm(): void {
     this.swarm.on("connection", (conn: any, info: any) => {
+      console.log("🎉 NEW P2P CONNECTION ESTABLISHED!");
       console.log(
-        "New P2P connection established with peer:",
+        "Peer ID:",
         info.peer?.toString("hex")?.substring(0, 16) || "unknown"
       );
       console.log("Total peers now:", this.swarm.peers.length);
@@ -126,23 +127,25 @@ export class P2PUser {
 
     try {
       // Both users act as both server and client for bidirectional communication
-      console.log("Starting P2P user in bidirectional mode...");
-      console.log("Topic:", this.topic.toString("hex"));
-      console.log("Client ID:", this.clientId);
+      console.log("🚀 Starting P2P user in bidirectional mode...");
+      console.log("📡 Topic:", this.topic.toString("hex"));
+      console.log("🆔 Client ID:", this.clientId);
 
       const discovery = this.swarm.join(this.topic, {
         server: true,
         client: true,
       });
+      console.log("⏳ Waiting for topic to be announced on DHT...");
       await discovery.flushed(); // Wait for topic to be announced
-      console.log("Topic announced on DHT");
+      console.log("✅ Topic announced on DHT");
 
+      console.log("⏳ Waiting for swarm to connect to pending peers...");
       await this.swarm.flush(); // Waits for the swarm to connect to pending peers
       console.log(
-        "P2P User started in bidirectional mode - can send and receive..."
+        "✅ P2P User started in bidirectional mode - can send and receive..."
       );
-      console.log("Current peer count:", this.swarm.peers.length);
-      console.log("Current connections:", this.connections.length);
+      console.log("👥 Current peer count:", this.swarm.peers.length);
+      console.log("🔗 Current connections:", this.connections.length);
 
       // Start periodic connection status check
       this.startConnectionStatusCheck();
