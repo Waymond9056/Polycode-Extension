@@ -1,15 +1,19 @@
 import * as vscode from "vscode";
 import { P2PUser } from "./p2pUser";
+import { randomBytes } from "crypto";
+
+// Generate a unique client ID for this instance
+const CLIENT_ID = randomBytes(8).toString("hex");
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log("Polycode extension activated!");
+  console.log("Polycode extension activated with client ID:", CLIENT_ID);
 
   // Initialize P2P User for real-time collaboration
   const p2pUser = new P2PUser();
   context.subscriptions.push({
     dispose: async () => {
       await p2pUser.stop();
-    }
+    },
   });
 
   // Start P2P networking
@@ -32,7 +36,7 @@ export function activate(context: vscode.ExtensionContext) {
         event.contentChanges.length
       );
       console.log("Content changes:", event.contentChanges);
-      
+
       const crdtUpdate = createCRDTUpdate(event);
       console.log("CRDT Update:", JSON.stringify(crdtUpdate, null, 2));
 
@@ -187,36 +191,36 @@ function hookMessages(
     if (msg?.type === "saveToGitHub" && p2pUser) {
       const commitMessage = msg.commitMessage || "Auto-save from Polycode";
       console.log("Saving to GitHub with message:", commitMessage);
-      p2pUser.saveToGitHub(commitMessage).then(success => {
+      p2pUser.saveToGitHub(commitMessage).then((success) => {
         if (success) {
           webview.postMessage({
             type: "githubSaveResult",
             success: true,
-            message: "Successfully saved to GitHub"
+            message: "Successfully saved to GitHub",
           });
         } else {
           webview.postMessage({
             type: "githubSaveResult",
             success: false,
-            message: "Failed to save to GitHub"
+            message: "Failed to save to GitHub",
           });
         }
       });
     }
     if (msg?.type === "syncFromGitHub" && p2pUser) {
       console.log("Syncing from GitHub");
-      p2pUser.syncFromGitHub().then(success => {
+      p2pUser.syncFromGitHub().then((success) => {
         if (success) {
           webview.postMessage({
             type: "githubSyncResult",
             success: true,
-            message: "Successfully synced from GitHub"
+            message: "Successfully synced from GitHub",
           });
         } else {
           webview.postMessage({
             type: "githubSyncResult",
             success: false,
-            message: "Failed to sync from GitHub"
+            message: "Failed to sync from GitHub",
           });
         }
       });
@@ -226,7 +230,7 @@ function hookMessages(
         type: "p2pStatus",
         isConnected: p2pUser.isConnected(),
         peerCount: p2pUser.getPeerCount(),
-        peerId: p2pUser.getPeerId()
+        peerId: p2pUser.getPeerId(),
       });
     }
   });
@@ -276,6 +280,20 @@ function getNonce() {
 
 function createCRDTUpdate(event: vscode.TextDocumentChangeEvent) {
   const timestamp = Date.now();
+
+  // Convert absolute path to relative path for cross-computer syncing
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  let documentPath = event.document.uri.toString();
+
+  if (workspaceFolder) {
+    const workspaceUri = workspaceFolder.uri.toString();
+    if (documentPath.startsWith(workspaceUri)) {
+      // Convert to relative path
+      const relativePath = documentPath.substring(workspaceUri.length + 1); // +1 to remove leading slash
+      documentPath = relativePath;
+    }
+  }
+
   const updates = event.contentChanges.map((change, index) => {
     const update: any = {
       id: `${timestamp}-${index}`,
@@ -311,9 +329,10 @@ function createCRDTUpdate(event: vscode.TextDocumentChangeEvent) {
   });
 
   return {
-    document: event.document.uri.toString(),
+    document: documentPath, // Use relative path instead of absolute URI
     timestamp,
     updates,
+    clientId: CLIENT_ID, // Add client ID to identify the source
   };
 }
 
@@ -325,14 +344,42 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
       return;
     }
 
-    const documentUri = updates[0].document;
-    if (!documentUri) {
-      console.error("No document URI found in CRDT updates");
+    // Filter out updates that originated from this client to prevent feedback loops
+    const filteredUpdates = updates.filter((update) => {
+      if (update.clientId === CLIENT_ID) {
+        console.log("Skipping CRDT update from same client:", update.clientId);
+        return false;
+      }
+      return true;
+    });
+
+    if (filteredUpdates.length === 0) {
+      console.log("All CRDT updates filtered out (from same client)");
       return;
     }
 
-    // Parse the document URI
-    const targetUri = vscode.Uri.parse(documentUri);
+    const documentPath = filteredUpdates[0].document;
+    if (!documentPath) {
+      console.error("No document path found in CRDT updates");
+      return;
+    }
+
+    // Resolve relative path to absolute URI
+    let targetUri: vscode.Uri;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+    if (documentPath.startsWith("file://")) {
+      // Already an absolute URI
+      targetUri = vscode.Uri.parse(documentPath);
+    } else {
+      // Relative path - resolve against workspace root
+      if (workspaceFolder) {
+        targetUri = vscode.Uri.joinPath(workspaceFolder.uri, documentPath);
+      } else {
+        // Fallback to current working directory
+        targetUri = vscode.Uri.file(documentPath);
+      }
+    }
 
     // Check if file exists, create if it doesn't
     let targetDocument: vscode.TextDocument;
@@ -348,14 +395,14 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
     const editor = await vscode.window.showTextDocument(targetDocument);
 
     // Apply all updates in chronological order
-    for (const update of updates) {
+    for (const update of filteredUpdates) {
       for (const operation of update.updates) {
         await applyCRDTOperation(editor, operation);
       }
     }
 
     vscode.window.showInformationMessage(
-      `Applied ${updates.length} CRDT updates to ${targetUri.fsPath}`
+      `Applied ${filteredUpdates.length} CRDT updates to ${targetUri.fsPath}`
     );
   } catch (error) {
     console.error("Error applying CRDT updates:", error);
