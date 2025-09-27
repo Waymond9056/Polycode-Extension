@@ -9,7 +9,10 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:polycode.view",
+    "onCommand:polycode.openPanel"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -17,8 +20,40 @@
         "command": "polycode.helloWorld",
         "title": "Hello World",
         "category": "Polycode"
+      },
+      {
+        "command": "polycode.openPanel",
+        "title": "Open Polycode Panel",
+        "category": "Polycode"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "polycode",
+          "title": "Polycode",
+          "icon": "media/polycode.svg"
+        }
+      ]
+    },
+    "views": {
+      "polycode": [
+        {
+          "id": "polycode.view",
+          "name": "Polycode Home",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "polycode.openPanel",
+          "when": "view == polycode.view",
+          "group": "navigation@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
