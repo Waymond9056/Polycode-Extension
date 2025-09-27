@@ -42,6 +42,7 @@ export class P2PUser {
   private isStarted: boolean = false;
   private clientId: string;
   private isServer: boolean = false;
+  private connections: any[] = []; // Store actual connection objects
 
   constructor(
     topicName: string = "polycode",
@@ -70,6 +71,10 @@ export class P2PUser {
       );
       console.log("Total peers now:", this.swarm.peers.length);
 
+      // Store the connection object
+      this.connections.push(conn);
+      console.log("Total connections now:", this.connections.length);
+
       conn.on("data", async (data: Buffer) => {
         try {
           const messageStr = data.toString();
@@ -93,9 +98,16 @@ export class P2PUser {
       });
 
       conn.on("close", () => {
+        // Remove the connection from our array
+        const index = this.connections.indexOf(conn);
+        if (index > -1) {
+          this.connections.splice(index, 1);
+        }
         console.log(
           "P2P connection closed. Remaining peers:",
-          this.swarm.peers.length
+          this.swarm.peers.length,
+          "Remaining connections:",
+          this.connections.length
         );
       });
     });
@@ -282,13 +294,20 @@ export class P2PUser {
 
   private async broadcastToSwarm(message: P2PMessage): Promise<void> {
     const messageStr = JSON.stringify(message);
+    console.log(
+      "Broadcasting message to",
+      this.connections.length,
+      "connections"
+    );
 
-    // Send to all connected peers
-    for (const peer of this.swarm.peers) {
+    // Send to all active connections
+    for (const conn of this.connections) {
       try {
-        peer.write(messageStr);
+        console.log("Writing to connection:", typeof conn.write);
+        conn.write(messageStr);
+        console.log("Successfully wrote to connection");
       } catch (error) {
-        console.error("Error broadcasting to peer:", error);
+        console.error("Error broadcasting to connection:", error);
       }
     }
   }
@@ -324,14 +343,16 @@ export class P2PUser {
 
   async sendTestMessage(message: string = "I LOVE YOU"): Promise<void> {
     console.log("Sending test message:", message);
+    console.log("Available connections:", this.connections.length);
 
-    // Send to all connected peers (like the working example)
-    for (const peer of this.swarm.peers) {
+    // Send to all active connections (like the working example)
+    for (const conn of this.connections) {
       try {
-        peer.write(message);
-        console.log("Sent test message to peer");
+        console.log("Writing test message to connection:", typeof conn.write);
+        conn.write(message);
+        console.log("Sent test message to connection");
       } catch (error) {
-        console.error("Error sending test message to peer:", error);
+        console.error("Error sending test message to connection:", error);
       }
     }
   }
