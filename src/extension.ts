@@ -280,12 +280,16 @@ function hookMessages(
       });
     }
     if (msg?.type === "getP2PStatus" && p2pUser) {
+      // Send a ping to help identify peers
+      p2pUser.identifyPeers().catch(console.error);
+
       webview.postMessage({
         type: "p2pStatus",
         isConnected: p2pUser.isConnected(),
         peerCount: p2pUser.getPeerCount(),
         peerId: p2pUser.getPeerId(),
         clientId: p2pUser.getClientId(),
+        peers: p2pUser.getConnectedPeers(),
       });
     }
     if (msg?.type === "pingPeers" && p2pUser) {

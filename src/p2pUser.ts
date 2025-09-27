@@ -43,6 +43,7 @@ export class P2PUser {
   private isStarted: boolean = false;
   private clientId: string;
   private connections: any[] = []; // Store actual connection objects
+  private peerClientIds: Map<string, string> = new Map(); // Map connection to client ID
   private applyCRDTUpdatesToFile: (updates: any[]) => Promise<void>;
 
   constructor(
@@ -199,6 +200,11 @@ export class P2PUser {
     await this.broadcastToSwarm(message);
   }
 
+  async identifyPeers(): Promise<void> {
+    // Send a ping to help identify peers and get their client IDs
+    await this.pingPeers("Peer identification ping");
+  }
+
   async saveToGitHub(
     commitMessage: string = "Auto-save from Polycode P2P"
   ): Promise<boolean> {
@@ -259,6 +265,17 @@ export class P2PUser {
 
   private async handleMessage(message: P2PMessage): Promise<void> {
     console.log("Received P2P message:", message);
+
+    // Track client ID from any message that contains it
+    if (message.clientId) {
+      const connectionKey = this.getConnectionKey(message);
+      if (connectionKey) {
+        this.peerClientIds.set(connectionKey, message.clientId);
+        console.log(
+          `Tracked client ID: ${message.clientId} for connection ${connectionKey}`
+        );
+      }
+    }
 
     switch (message.type) {
       case "crdt_update":
@@ -352,6 +369,37 @@ export class P2PUser {
 
   getPeerId(): string | undefined {
     return this.swarm.peerId ? this.swarm.peerId.toString("hex") : undefined;
+  }
+
+  private getConnectionKey(message: P2PMessage): string | null {
+    // Try to find the connection that sent this message
+    // This is a simplified approach - in a real implementation, you'd need to track which connection sent which message
+    for (let i = 0; i < this.connections.length; i++) {
+      const conn = this.connections[i];
+      const key = conn.remotePublicKey
+        ? conn.remotePublicKey.toString("hex")
+        : `conn_${i}`;
+      return key;
+    }
+    return null;
+  }
+
+  getConnectedPeers(): any[] {
+    // Return peer info with actual client IDs if available
+    return this.connections.map((conn, index) => {
+      const connectionKey = conn.remotePublicKey
+        ? conn.remotePublicKey.toString("hex")
+        : `conn_${index}`;
+      const clientId = this.peerClientIds.get(connectionKey) || `peer_${index}`;
+
+      return {
+        id: `peer_${index}`,
+        clientId: clientId,
+        peerId: conn.remotePublicKey
+          ? conn.remotePublicKey.toString("hex").substring(0, 8)
+          : `peer_${index}`,
+      };
+    });
   }
 
   isConnected(): boolean {

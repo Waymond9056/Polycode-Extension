@@ -31,6 +31,7 @@ function App() {
   const [currentPage, setCurrentPage] = React.useState<"main" | "save">("main");
   const [commitTitle, setCommitTitle] = React.useState<string>("Saving");
   const [commitMessage, setCommitMessage] = React.useState<string>("");
+  const [connectedUsers, setConnectedUsers] = React.useState<string[]>([]);
   const [pingMessage, setPingMessage] = React.useState<string>(
     "Hello from " + Math.random().toString(36).substring(2, 8)
   );
@@ -185,6 +186,19 @@ function App() {
       if (message.type === "p2pStatus") {
         console.log("P2P Status received:", message);
         setP2pStatus(message);
+
+        // Extract connected users from P2P status
+        if (message.peers && Array.isArray(message.peers)) {
+          const userList = message.peers.map(
+            (peer: any) => peer.clientId || peer.peerId || "Unknown User"
+          );
+          setConnectedUsers(userList);
+        } else if (message.peerCount > 0) {
+          // If we have peer count but no detailed peer info, show generic users
+          setConnectedUsers(Array(message.peerCount).fill("Connected User"));
+        } else {
+          setConnectedUsers([]);
+        }
       }
     };
 
@@ -201,6 +215,15 @@ function App() {
     return () => {
       window.removeEventListener("message", messageListener);
     };
+  }, []);
+
+  // Periodically request P2P status to keep connected users updated
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      vscode.postMessage({ type: "getP2PStatus" });
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const renderMainPage = () => (
@@ -276,130 +299,6 @@ function App() {
       </div>
 
       <div style={{ display: "grid", gap: 8 }}>
-        <VSCodeTextField
-          value={text}
-          onInput={(e: any) => setText(e.target.value)}
-          placeholder="Type something..."
-        />
-        <VSCodeButton onClick={() => toast(`Hello from ${text}!`)}>
-          Say
-        </VSCodeButton>
-        <VSCodeButton onClick={runFormat} appearance="secondary">
-          Format Document
-        </VSCodeButton>
-        <VSCodeButton
-          onClick={() =>
-            vscode.postMessage({
-              type: "runCommand",
-              command: "polycode.openPanel",
-            })
-          }
-        >
-          Open Panel
-        </VSCodeButton>
-        <VSCodeButton onClick={() => insertText("hello")}>
-          WRITE HI
-        </VSCodeButton>
-
-        <div
-          style={{
-            border: "1px solid var(--vscode-widget-border)",
-            padding: 8,
-            borderRadius: 4,
-          }}
-        >
-          <h4 style={{ margin: "0 0 8px 0" }}>CRDT Sync:</h4>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={autoSync}
-              onChange={(e) => {
-                setAutoSync(e.target.checked);
-                autoSyncRef.current = e.target.checked;
-                if (e.target.checked) {
-                  // Clear pending updates when starting auto-sync
-                  setPendingUpdates([]);
-                  pendingUpdatesRef.current = [];
-                }
-              }}
-              style={{ margin: 0 }}
-            />
-            <label
-              style={{ fontSize: "0.9em", color: "var(--vscode-foreground)" }}
-            >
-              Auto-sync every 0.25s
-            </label>
-          </div>
-          {autoSync && (
-            <div
-              style={{
-                fontSize: "0.8em",
-                color: "var(--vscode-descriptionForeground)",
-                marginBottom: 8,
-                padding: 4,
-                background: "var(--vscode-inputValidation-infoBackground)",
-                border: "1px solid var(--vscode-inputValidation-infoBorder)",
-                borderRadius: 4,
-              }}
-            >
-              Auto-sync is active. Changes will be automatically applied to the
-              correct files every 0.25 seconds.
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            border: "1px solid var(--vscode-widget-border)",
-            padding: 8,
-            borderRadius: 4,
-          }}
-        >
-          <h4 style={{ margin: "0 0 8px 0" }}>Current Editor Content:</h4>
-          <VSCodeButton
-            onClick={getEditorContent}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Refresh Content
-          </VSCodeButton>
-          <VSCodeButton
-            onClick={testConnection}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Test Connection
-          </VSCodeButton>
-          <VSCodeButton
-            onClick={testP2PConnection}
-            appearance="secondary"
-            style={{ marginBottom: 8 }}
-          >
-            Test P2P Status
-          </VSCodeButton>
-          <div
-            style={{
-              fontFamily: "var(--vscode-editor-font-family)",
-              fontSize: "var(--vscode-editor-font-size)",
-              background: "var(--vscode-editor-background)",
-              padding: 8,
-              borderRadius: 4,
-              maxHeight: 200,
-              overflow: "auto",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {editorContent}
-          </div>
-        </div>
-
         <div
           style={{
             border: "1px solid var(--vscode-widget-border)",
@@ -522,6 +421,60 @@ function App() {
           >
             Send Response
           </VSCodeButton>
+        </div>
+
+        {/* Connected Users Display */}
+        <div
+          style={{
+            border: "1px solid var(--vscode-widget-border)",
+            padding: 8,
+            borderRadius: 4,
+            marginTop: 16,
+          }}
+        >
+          <h4 style={{ margin: "0 0 8px 0" }}>
+            Connected Users ({connectedUsers.length}):
+          </h4>
+          <div
+            style={{
+              fontFamily: "var(--vscode-editor-font-family)",
+              fontSize: "0.9em",
+              background: "var(--vscode-editor-background)",
+              padding: 8,
+              borderRadius: 4,
+              minHeight: "60px",
+              maxHeight: "120px",
+              overflow: "auto",
+              border: "1px solid var(--vscode-widget-border)",
+            }}
+          >
+            {connectedUsers.length === 0 ? (
+              <div
+                style={{
+                  color: "var(--vscode-descriptionForeground)",
+                  fontStyle: "italic",
+                }}
+              >
+                No users connected
+              </div>
+            ) : (
+              connectedUsers.map((user, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: "2px 4px",
+                    marginBottom: 2,
+                    borderRadius: 3,
+                    backgroundColor:
+                      "var(--vscode-inputValidation-infoBackground)",
+                    color: "var(--vscode-inputValidation-infoForeground)",
+                  }}
+                >
+                  👤 {user}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
