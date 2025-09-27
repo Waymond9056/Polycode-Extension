@@ -23,7 +23,6 @@ function App() {
   const [text, setText] = React.useState("Polycode");
   const [editorContent, setEditorContent] = React.useState("No editor content");
   const [crdtUpdates, setCrdtUpdates] = React.useState<any[]>([]);
-  const [syncTarget, setSyncTarget] = React.useState<string>("");
   const [autoSync, setAutoSync] = React.useState<boolean>(false);
   const [pendingUpdates, setPendingUpdates] = React.useState<any[]>([]);
   const autoSyncRef = React.useRef<boolean>(false);
@@ -58,29 +57,20 @@ function App() {
   const applyCRDTUpdates = () => {
     console.log(
       "applyCRDTUpdates called, pendingUpdates:",
-      pendingUpdatesRef.current.length,
-      "syncTarget:",
-      syncTarget
+      pendingUpdatesRef.current.length
     );
 
     if (pendingUpdatesRef.current.length === 0) {
       console.log("No pending updates to apply");
       return; // No pending updates to apply
     }
-    if (!syncTarget) {
-      console.log("No sync target");
-      return; // No target file
-    }
 
     console.log(
-      "Applying pending CRDT updates to:",
-      syncTarget,
-      "Count:",
+      "Applying pending CRDT updates, Count:",
       pendingUpdatesRef.current.length
     );
     vscode.postMessage({
       type: "applyCRDTUpdates",
-      targetFile: syncTarget,
       updates: pendingUpdatesRef.current,
     });
 
@@ -91,13 +81,8 @@ function App() {
 
   // Auto-sync effect
   React.useEffect(() => {
-    console.log(
-      "Auto-sync effect running, autoSync:",
-      autoSync,
-      "syncTarget:",
-      syncTarget
-    );
-    if (!autoSync || !syncTarget) {
+    console.log("Auto-sync effect running, autoSync:", autoSync);
+    if (!autoSync) {
       return;
     }
 
@@ -110,7 +95,7 @@ function App() {
       console.log("Clearing auto-sync interval");
       clearInterval(interval);
     };
-  }, [autoSync, syncTarget]);
+  }, [autoSync]);
 
   // Listen for messages from the extension using VS Code webview API
   React.useEffect(() => {
@@ -203,12 +188,6 @@ function App() {
           }}
         >
           <h4 style={{ margin: "0 0 8px 0" }}>CRDT Sync:</h4>
-          <VSCodeTextField
-            value={syncTarget}
-            onInput={(e: any) => setSyncTarget(e.target.value)}
-            placeholder="Enter target file path (e.g., sync.txt)"
-            style={{ marginBottom: 8, width: "100%" }}
-          />
           <div
             style={{
               display: "flex",
@@ -249,8 +228,7 @@ function App() {
                 borderRadius: 4,
               }}
             >
-              Auto-sync is active. Changes will be applied to{" "}
-              {syncTarget || "target file"} every 0.25 seconds.
+              Auto-sync is active. Changes will be automatically applied to the correct files every 0.25 seconds.
             </div>
           )}
         </div>
