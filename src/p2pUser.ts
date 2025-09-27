@@ -273,6 +273,12 @@ export class P2PUser {
       `Received CRDT update from peer ${message.peerId} for document: ${message.document}`
     );
 
+    // Check if this update originated from this client to prevent infinite loops
+    if (message.clientId === this.clientId) {
+      console.log(`Skipping CRDT update from same client: ${message.clientId}`);
+      return;
+    }
+
     // Apply the CRDT updates to the corresponding file automatically
     try {
       await this.applyCRDTUpdatesToFile([message]);
