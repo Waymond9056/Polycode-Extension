@@ -150,6 +150,18 @@ function hookMessages(
     if (msg?.type === "runCommand" && typeof msg.command === "string") {
       vscode.commands.executeCommand(msg.command);
     }
+    if (msg?.type === "setUserName" && typeof msg.userName === "string") {
+      // Store the user name and broadcast it to peers
+      if (p2pUser) {
+        p2pUser.setUserName(msg.userName);
+        p2pUser.broadcastMessage({
+          type: "userNameUpdate",
+          userName: msg.userName,
+          clientId: p2pUser.getClientId(),
+          timestamp: Date.now(),
+        });
+      }
+    }
     if (msg?.type === "executeShell" && typeof msg.script === "string") {
       const { exec } = require("child_process");
       const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;

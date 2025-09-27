@@ -28,10 +28,13 @@ function App() {
   const autoSyncRef = React.useRef<boolean>(false);
   const pendingUpdatesRef = React.useRef<any[]>([]);
   const [p2pStatus, setP2pStatus] = React.useState<any>(null);
-  const [currentPage, setCurrentPage] = React.useState<"main" | "save">("main");
+  const [currentPage, setCurrentPage] = React.useState<
+    "main" | "save" | "settings"
+  >("main");
   const [commitTitle, setCommitTitle] = React.useState<string>("Saving");
   const [commitMessage, setCommitMessage] = React.useState<string>("");
   const [connectedUsers, setConnectedUsers] = React.useState<string[]>([]);
+  const [userName, setUserName] = React.useState<string>("");
   const [pingMessage, setPingMessage] = React.useState<string>(
     "Hello from " + Math.random().toString(36).substring(2, 8)
   );
@@ -72,6 +75,19 @@ function App() {
   };
 
   const navigateToMain = () => {
+    setCurrentPage("main");
+  };
+
+  const navigateToSettings = () => {
+    setCurrentPage("settings");
+  };
+
+  const saveUserName = () => {
+    // Save the user name and broadcast it to peers
+    vscode.postMessage({
+      type: "setUserName",
+      userName: userName,
+    });
     setCurrentPage("main");
   };
 
@@ -190,7 +206,8 @@ function App() {
         // Extract connected users from P2P status
         if (message.peers && Array.isArray(message.peers)) {
           const userList = message.peers.map(
-            (peer: any) => peer.clientId || peer.peerId || "Unknown User"
+            (peer: any) =>
+              peer.userName || peer.clientId || peer.peerId || "Unknown User"
           );
           setConnectedUsers(userList);
         } else if (message.peerCount > 0) {
@@ -277,12 +294,7 @@ function App() {
           ▶️
         </VSCodeButton>
         <VSCodeButton
-          onClick={() =>
-            vscode.postMessage({
-              type: "runCommand",
-              command: "workbench.action.openSettings",
-            })
-          }
+          onClick={navigateToSettings}
           appearance="secondary"
           style={{
             width: "40px",
@@ -538,7 +550,60 @@ function App() {
     </div>
   );
 
-  return currentPage === "main" ? renderMainPage() : renderSavePage();
+  const renderSettingsPage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <VSCodeButton
+          onClick={navigateToMain}
+          appearance="secondary"
+          style={{ marginRight: 8, padding: "4px 8px" }}
+        >
+          ← Back
+        </VSCodeButton>
+        <h3 style={{ margin: 0 }}>Settings</h3>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Your Display Name:
+          </label>
+          <VSCodeTextField
+            value={userName}
+            onInput={(e: any) => setUserName(e.target.value)}
+            placeholder="Enter your name..."
+            style={{ width: "100%" }}
+          />
+          <div
+            style={{
+              fontSize: "0.8em",
+              color: "var(--vscode-descriptionForeground)",
+              marginTop: 4,
+            }}
+          >
+            This name will be shown to other connected users
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <VSCodeButton onClick={navigateToMain} appearance="secondary">
+            Cancel
+          </VSCodeButton>
+          <VSCodeButton onClick={saveUserName} appearance="primary">
+            💾 Save Name
+          </VSCodeButton>
+        </div>
+      </div>
+    </div>
+  );
+
+  return currentPage === "main"
+    ? renderMainPage()
+    : currentPage === "save"
+    ? renderSavePage()
+    : renderSettingsPage();
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

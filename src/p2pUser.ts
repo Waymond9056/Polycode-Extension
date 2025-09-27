@@ -44,6 +44,8 @@ export class P2PUser {
   private clientId: string;
   private connections: any[] = []; // Store actual connection objects
   private peerClientIds: Map<string, string> = new Map(); // Map connection to client ID
+  private peerUserNames: Map<string, string> = new Map(); // Map connection to user name
+  private userName: string = ""; // Current user's display name
   private applyCRDTUpdatesToFile: (updates: any[]) => Promise<void>;
 
   constructor(
@@ -277,6 +279,19 @@ export class P2PUser {
       }
     }
 
+    // Track user name from userNameUpdate messages
+    if (message.type === "userNameUpdate" && (message as any).userName) {
+      const connectionKey = this.getConnectionKey(message);
+      if (connectionKey) {
+        this.peerUserNames.set(connectionKey, (message as any).userName);
+        console.log(
+          `Tracked user name: ${
+            (message as any).userName
+          } for connection ${connectionKey}`
+        );
+      }
+    }
+
     switch (message.type) {
       case "crdt_update":
         await this.handleCRDTUpdate(message as CRDTUpdateMessage);
@@ -384,17 +399,24 @@ export class P2PUser {
     return null;
   }
 
+  setUserName(userName: string): void {
+    this.userName = userName;
+    console.log(`User name set to: ${userName}`);
+  }
+
   getConnectedPeers(): any[] {
-    // Return peer info with actual client IDs if available
+    // Return peer info with user names if available, otherwise client IDs
     return this.connections.map((conn, index) => {
       const connectionKey = conn.remotePublicKey
         ? conn.remotePublicKey.toString("hex")
         : `conn_${index}`;
       const clientId = this.peerClientIds.get(connectionKey) || `peer_${index}`;
+      const userName = this.peerUserNames.get(connectionKey) || clientId;
 
       return {
         id: `peer_${index}`,
         clientId: clientId,
+        userName: userName,
         peerId: conn.remotePublicKey
           ? conn.remotePublicKey.toString("hex").substring(0, 8)
           : `peer_${index}`,
