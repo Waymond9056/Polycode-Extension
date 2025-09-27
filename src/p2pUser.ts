@@ -42,11 +42,18 @@ export class P2PUser {
   private isStarted: boolean = false;
   private clientId: string;
   private connections: any[] = []; // Store actual connection objects
+  private applyCRDTUpdatesToFile: (updates: any[]) => Promise<void>;
 
-  constructor(topicName: string = "polycode", clientId?: string) {
+  constructor(
+    topicName: string = "polycode",
+    clientId?: string,
+    applyCRDTUpdatesToFile?: (updates: any[]) => Promise<void>
+  ) {
     this.swarm = new Hyperswarm();
     this.topic = Buffer.alloc(32).fill(topicName); // A topic must be 32 bytes
     this.clientId = clientId || this.generateClientId();
+    this.applyCRDTUpdatesToFile =
+      applyCRDTUpdatesToFile || (() => Promise.resolve());
     this.setupSwarm();
   }
 
@@ -279,7 +286,7 @@ export class P2PUser {
       return;
     }
 
-    // Apply the CRDT updates to the corresponding file automatically
+    // Delegate to the extension's applyCRDTUpdatesToFile function to use the proper flag mechanism
     try {
       await this.applyCRDTUpdatesToFile([message]);
 
@@ -430,94 +437,5 @@ export class P2PUser {
     vscode.window.showInformationMessage(
       `P2P Connection: ${message.clientId} responded (${latency}ms latency)`
     );
-  }
-
-  private async applyCRDTUpdatesToFile(
-    updates: CRDTUpdateMessage[]
-  ): Promise<void> {
-    try {
-      // Extract the document URI from the first update (all updates should be for the same file)
-      if (!updates || updates.length === 0) {
-        console.error("No updates provided to applyCRDTUpdatesToFile");
-        return;
-      }
-
-      const documentPath = updates[0].document;
-      if (!documentPath) {
-        console.error("No document path found in CRDT updates");
-        return;
-      }
-
-      // Resolve relative path to absolute URI
-      let uri: vscode.Uri;
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-
-      if (documentPath.startsWith("file://")) {
-        // Already an absolute URI
-        uri = vscode.Uri.parse(documentPath);
-      } else {
-        // Relative path - resolve against workspace root
-        if (workspaceFolder) {
-          uri = vscode.Uri.joinPath(workspaceFolder.uri, documentPath);
-        } else {
-          // Fallback to current working directory
-          uri = vscode.Uri.file(documentPath);
-        }
-      }
-
-      // Check if file exists, create if it doesn't
-      let targetDocument: vscode.TextDocument;
-      try {
-        targetDocument = await vscode.workspace.openTextDocument(uri);
-      } catch (error) {
-        // File doesn't exist, create it
-        await vscode.workspace.fs.writeFile(uri, Buffer.from(""));
-        targetDocument = await vscode.workspace.openTextDocument(uri);
-      }
-
-      // Open the target file in an editor
-      const editor = await vscode.window.showTextDocument(targetDocument);
-
-      // Apply all updates in chronological order
-      for (const update of updates) {
-        for (const operation of update.updates) {
-          await this.applyCRDTOperation(editor, operation);
-        }
-      }
-
-      console.log(`Applied ${updates.length} CRDT updates to ${documentPath}`);
-    } catch (error) {
-      console.error("Error applying CRDT updates:", error);
-      throw error;
-    }
-  }
-
-  private async applyCRDTOperation(
-    editor: vscode.TextEditor,
-    operation: any
-  ): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const position = new vscode.Position(
-        operation.position.line,
-        operation.position.character
-      );
-
-      editor
-        .edit((editBuilder) => {
-          if (operation.operation === "insert" && operation.text) {
-            editBuilder.insert(position, operation.text);
-          } else if (operation.operation === "delete" && operation.length) {
-            const endPosition = new vscode.Position(
-              operation.range.end.line,
-              operation.range.end.character
-            );
-            const range = new vscode.Range(position, endPosition);
-            editBuilder.delete(range);
-          }
-        })
-        .then(() => {
-          resolve();
-        });
-    });
   }
 }
