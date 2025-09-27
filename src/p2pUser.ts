@@ -436,14 +436,28 @@ export class P2PUser {
         return;
       }
 
-      const documentUri = updates[0].document;
-      if (!documentUri) {
-        console.error("No document URI found in CRDT updates");
+      const documentPath = updates[0].document;
+      if (!documentPath) {
+        console.error("No document path found in CRDT updates");
         return;
       }
 
-      // Convert document URI string to vscode.Uri
-      const uri = vscode.Uri.parse(documentUri);
+      // Resolve relative path to absolute URI
+      let uri: vscode.Uri;
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+      if (documentPath.startsWith("file://")) {
+        // Already an absolute URI
+        uri = vscode.Uri.parse(documentPath);
+      } else {
+        // Relative path - resolve against workspace root
+        if (workspaceFolder) {
+          uri = vscode.Uri.joinPath(workspaceFolder.uri, documentPath);
+        } else {
+          // Fallback to current working directory
+          uri = vscode.Uri.file(documentPath);
+        }
+      }
 
       // Check if file exists, create if it doesn't
       let targetDocument: vscode.TextDocument;
@@ -465,7 +479,7 @@ export class P2PUser {
         }
       }
 
-      console.log(`Applied ${updates.length} CRDT updates to ${documentUri}`);
+      console.log(`Applied ${updates.length} CRDT updates to ${documentPath}`);
     } catch (error) {
       console.error("Error applying CRDT updates:", error);
       throw error;
