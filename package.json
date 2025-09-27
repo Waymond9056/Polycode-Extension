@@ -10,8 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:polycode.view",
-    "onCommand:polycode.openPanel"
+    "*"
   ],
   "main": "./out/extension.js",
   "contributes": {

@@ -4,16 +4,11 @@
     "module": "commonjs",
     "lib": ["es2020", "dom"],
     "outDir": "out",
-    // "rootDir": "src",
+    "rootDir": "src",
     "strict": true,
     "sourceMap": true,
-	"esModuleInterop": true,
+    "esModuleInterop": true,
     "jsx": "react-jsx"
-
-  }
-  ,
-  "include": [
-    "src",
-    "media-src"
-  ]
+  },
+  "include": ["src"]
 }
