@@ -638,19 +638,23 @@ export class P2PUser {
     const workspacePath = activeWorkspace.uri.fsPath;
     console.log(`Syncing in workspace: ${workspacePath}`);
 
-    // Complete sync strategy - includes the additional steps you found
+    // Complete sync strategy - ensure all steps execute properly
     const syncCommands = `cd "${workspacePath}" && 
-      echo "Starting sync process..." && 
+      echo "=== Starting sync process ===" && 
       git status && 
+      echo "=== Adding all changes ===" && 
       git add . && 
+      echo "=== Committing local changes ===" && 
       git commit -m "Local changes before sync" || echo "No local changes to commit" && 
-      echo "Fetching latest changes..." && 
+      echo "=== Fetching latest changes ===" && 
       git fetch origin && 
-      echo "Resetting to remote main..." && 
+      echo "=== Resetting to remote main ===" && 
       git reset --hard origin/main && 
-      echo "Pulling latest changes..." && 
+      echo "=== Pulling latest changes ===" && 
       git pull && 
-      echo "Sync completed successfully"`;
+      echo "=== Final status ===" && 
+      git status && 
+      echo "=== Sync completed successfully ==="`;
 
     console.log(`Executing sync commands: ${syncCommands}`);
 
@@ -688,6 +692,21 @@ export class P2PUser {
       }
 
       vscode.window.showInformationMessage(`Workspace synced successfully`);
+
+      // Ensure reset and pull always happen as a safety measure
+      console.log("Running safety reset and pull...");
+      const safetyCommands = `cd "${workspacePath}" && git reset --hard origin/main && git pull`;
+
+      exec(
+        safetyCommands,
+        (safetyError: any, safetyStdout: string, safetyStderr: string) => {
+          if (safetyError) {
+            console.error(`Safety sync failed: ${safetyError}`);
+          } else {
+            console.log(`Safety sync completed: ${safetyStdout}`);
+          }
+        }
+      );
     });
   }
 }
