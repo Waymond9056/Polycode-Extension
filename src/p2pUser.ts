@@ -648,7 +648,8 @@ export class P2PUser {
         sleep 2 && 
         git fetch origin && 
         git reset --hard origin/main && 
-        git pull origin main
+        git pull &&
+        git status
       `
         .replace(/\s+/g, " ")
         .trim();
