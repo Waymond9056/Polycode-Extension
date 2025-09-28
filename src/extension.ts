@@ -502,7 +502,8 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
       documentPath.includes("\\.git\\") ||
       documentPath.endsWith(".git") ||
       documentPath.includes(".gitignore") ||
-      documentPath.includes(".gitattributes");
+      documentPath.includes(".gitattributes") ||
+      documentPath.includes("vscode");
 
     if (isGitFile) {
       console.log("Skipping Git-related file update:", documentPath);

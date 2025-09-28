@@ -647,13 +647,24 @@ export class P2PUser {
     const workspacePath = activeWorkspace.uri.fsPath;
     console.log(`Syncing in workspace: ${workspacePath}`);
 
-    // Complete sync strategy - ensure all steps execute properly
+    // Enhanced sync strategy with better debugging
     const syncCommands = `cd "${workspacePath}" &&
+      echo "=== Current branch ===" && 
+      git branch -v && 
+      echo "=== Remote status ===" && 
+      git remote -v && 
+      echo "=== Fetching latest ===" && 
+      git fetch origin && 
+      echo "=== Remote main status ===" && 
+      git log --oneline origin/main -5 && 
+      echo "=== Resetting to origin/main ===" && 
       git reset --hard origin/main && 
       echo "=== Pulling latest changes ===" && 
       git pull && 
       echo "=== Final status ===" && 
       git status && 
+      echo "=== Current commit ===" && 
+      git log --oneline -3 && 
       echo "=== Sync completed successfully ==="`;
 
     console.log(`Executing sync commands: ${syncCommands}`);
