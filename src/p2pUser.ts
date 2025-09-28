@@ -687,18 +687,26 @@ export class P2PUser {
 
       // ALWAYS run git pull completely independently, regardless of what happened above
       console.log("=== RUNNING INDEPENDENT GIT PULL ===");
+      console.log("Workspace path:", workspacePath);
+      console.log("About to execute: git pull");
+
       try {
-        const { stdout, stderr } = await execAsync("git pull", {
+        console.log("Executing git pull now...");
+        const result = await execAsync("git pull", {
           cwd: workspacePath,
         });
-        console.log("Independent git pull stdout:", stdout);
-        if (stderr) console.log("Independent git pull stderr:", stderr);
+        console.log("Git pull result:", result);
+        console.log("Independent git pull stdout:", result.stdout);
+        if (result.stderr)
+          console.log("Independent git pull stderr:", result.stderr);
         console.log("Independent git pull completed successfully!");
       } catch (pullError: any) {
-        console.log(
-          "Independent git pull had issues (this is often normal):",
-          pullError.message
-        );
+        console.log("=== GIT PULL ERROR ===");
+        console.log("Error message:", pullError.message);
+        console.log("Error code:", pullError.code);
+        console.log("Error stdout:", pullError.stdout);
+        console.log("Error stderr:", pullError.stderr);
+        console.log("=== END GIT PULL ERROR ===");
         // Don't fail the whole sync if git pull has issues
       }
 
