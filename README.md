@@ -1,71 +1,33 @@
-# helloworld README
+## Inspiration
+The greatest part of a hackathon is stressing over code together. But that's hard to do when everyone is working on different versions of the code, bracing for the inevitable merge conflicts and "works on my machine" when mashing the code together. Indeed, in these small group settings when source control is not the priority, it would be much better if everyone could work synchronously on the same version of the codebase.
 
-This is the README for your extension "helloworld". After writing up a brief description, we recommend including the following sections.
+## What it does
+PolyCode is a VSCode extension that allows you to synchronously work together on a codebase. Edits from one user are automatically applied to the project files of all users. This allows users to be able to run all of their code on their own machine, taking advantage of completed project features without needing to wait for GitHub.
 
-## Features
+This is not to say PolyCode is trying to replace GitHub. In fact, PolyCode actually uses GitHub to save project checkpoints in the cloud, allowing users to pull the updates since their last session and seamlessly start editing again.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+Of course, with code now accessible on everyone's computer, we want to make sure it is actually runnable on everyone's computers. To do this, PolyCode is integrated with Docker to provide a standardized runtime environment to make sure all users are testing their code with the same system requirements.
 
-For example if there is an image subfolder under your extension project workspace:
+## Comparison with alternatives
+We thought to ourselves that collaborative coding must have been invented already. But it turns out, the current marketplace tools fall short in several places.
++ There's the online hosted ones such as Replit or CoderPad. However, these are inherently limited by being web-based. Imagine you are an interviewer trying to gauge how a dev works in his own IDE ecosystem. PolyCode provides that functionality while CoderPad pigeonholes you into its own interface.
++ There's also an extension called LiveShare. The main problem with this is that it requires a host computer to share their terminals and code. When the host leaves, so do your code changes. PolyCode is fundamentally peer-to-peer meaning that there is no reliance on anyone in the network. When someone leaves, their changes are already on everyone's computers.
 
-\!\[feature X\]\(images/feature-x.png\)
+## How we built it
+PolyCode is primarily a TypeScript/JavaScript based VS Code extension that can read and write to files directly. The frontend is built using React webviews, utilizing VS Code native React components. We used CRDT data structures to keep track of simultaneous document changes (insertions, deletions) efficiently. We used Hyperswarm to find and network other nodes in a peer to peer architecture, removing the need for a centralized server. We use GitHub to save project checkpoints, and integrated with Docker to ensure a standardized runtime environment. 
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Challenges we ran into
+We ran into many interesting challenges during this Hackathon. Most notably, the problem of sending CRDT information between nodes on a serverless network. Due to the nature of P2P structures, "echoes" occurred where a node would receive data that had been sent into the network earlier by itself. We had to implement a id-checking system to resolve this.
 
-## Requirements
+Git was also surprisingly difficult to work with. Since Git was designed for single users on a tree-based worktree, merging multiple synchronous sessions into a single version history basically turns Git on its head. We had to come up with clever rebasing schemes to ensure all git version could be merged into the main branch.
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## Accomplishments that we're proud of
+We're proud of getting the project to work! Coming into the hackathon, we barely knew anything about networking, CRDTs, Docker, and many other necessary tools. We are proud of all the learning we did and all the bugs we had to push through.
 
-## Extension Settings
+On a more personal level, this was the first hackathon where we forced ourselves out of the usual library study room. It was great to interact with the other half of the hackathon, whether that was singing our hearts out at karaoke, answering fun questions at Impiricus' workshop, or watching that banger performance by Seoulstice.
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## What we learned
+There were many technologies in the creation of this project that we were completely new to, including networking (especially peer to peer) using Hyperswarm, making a VS Code extension (which was surprisingly painless), and creating Docker images for centralized runtime. Picking up new technologies quickly is an incredibly important asset in hackathons, and being a good developer. And, probably don't eat 2x spicy Buldak at 2 am.
 
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+## What's next for PolyCode
+PolyCode has a lot of room for improvement. Whether it is features we did not have time to implement, or were outside the scope of the project, we thought of countless ways to make this product more appealing. For one, we want to allow users to configure their own Docker images to centralize program runtime, to allow instantaneous integration and limit the barrier for entry as much as possible. AI copilot-type tools have become essential for developer productivity today, and a collaborative coding tool would not be complete without support for a collaboratively used AI agent. This, along with making our program failsafe and providing encryption and proper syncing, are all future directions for the developement of PolyCode.
