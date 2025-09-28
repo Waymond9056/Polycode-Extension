@@ -7,6 +7,8 @@ const CLIENT_ID = randomBytes(8).toString("hex");
 
 // Flag to prevent infinite loops when applying CRDT updates from P2P
 let isApplyingCRDTUpdate = false;
+// Flag to prevent CRDT updates during save operations
+let isSaveInProgress = false;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Polycode extension activated with client ID:", CLIENT_ID);
@@ -36,6 +38,14 @@ export function activate(context: vscode.ExtensionContext) {
       if (isApplyingCRDTUpdate) {
         console.log(
           "Skipping document change event - currently applying CRDT update"
+        );
+        return;
+      }
+
+      // Skip if a save operation is in progress to prevent conflicts
+      if (isSaveInProgress) {
+        console.log(
+          "Skipping document change event - save operation in progress"
         );
         return;
       }
@@ -184,6 +194,12 @@ function hookMessages(
         return;
       }
 
+      // Set save in progress flag for save operations
+      if (msg.script.includes("git checkout -b Saving")) {
+        isSaveInProgress = true;
+        console.log("Save operation started - blocking CRDT updates");
+      }
+
       const fullScript = `cd "${workspaceRoot}" && ${msg.script}`;
       console.log(`Executing: ${fullScript}`);
 
@@ -191,6 +207,11 @@ function hookMessages(
         if (error) {
           console.error(`Error executing shell command: ${error}`);
           vscode.window.showErrorMessage(`Error: ${error.message}`);
+          // Reset save flag on error
+          if (isSaveInProgress) {
+            isSaveInProgress = false;
+            console.log("Save operation failed - re-enabling CRDT updates");
+          }
           return;
         }
         if (stderr) {
@@ -200,6 +221,12 @@ function hookMessages(
         vscode.window.showInformationMessage(
           `Shell command executed successfully`
         );
+
+        // Reset save flag after successful execution
+        if (isSaveInProgress) {
+          isSaveInProgress = false;
+          console.log("Save operation completed - re-enabling CRDT updates");
+        }
 
         // If this was a save command, notify other peers to sync
         if (msg.script.includes("git checkout -b Saving") && p2pUser) {
