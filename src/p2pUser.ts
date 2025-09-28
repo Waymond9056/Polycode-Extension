@@ -652,7 +652,8 @@ export class P2PUser {
     // Execute commands step by step for better reliability
     const executeCommand = (
       command: string,
-      description: string
+      description: string,
+      timeoutMs: number = 30000
     ): Promise<void> => {
       return new Promise((resolve, reject) => {
         console.log(`Executing: ${description}`);
@@ -664,6 +665,18 @@ export class P2PUser {
 
         let stdout = "";
         let stderr = "";
+        let isResolved = false;
+
+        // Add timeout to prevent hanging
+        const timeout = setTimeout(() => {
+          if (!isResolved) {
+            console.log(
+              `${description} timed out after ${timeoutMs}ms, killing process...`
+            );
+            child.kill("SIGTERM");
+            reject(new Error(`${description} timed out after ${timeoutMs}ms`));
+          }
+        }, timeoutMs);
 
         child.stdout.on("data", (data: Buffer) => {
           const output = data.toString();
@@ -678,6 +691,9 @@ export class P2PUser {
         });
 
         child.on("close", (code: number | null) => {
+          if (isResolved) return;
+          isResolved = true;
+          clearTimeout(timeout);
           console.log(`${description} exited with code: ${code}`);
           if (code === 0) {
             resolve();
@@ -689,6 +705,9 @@ export class P2PUser {
         });
 
         child.on("error", (error: Error) => {
+          if (isResolved) return;
+          isResolved = true;
+          clearTimeout(timeout);
           reject(new Error(`${description} process error: ${error.message}`));
         });
       });
@@ -705,8 +724,9 @@ export class P2PUser {
         "Remote check"
       );
       await executeCommand(
-        `echo "=== Fetching latest ===" && git fetch origin`,
-        "Fetch"
+        `echo "=== Fetching latest ===" && git fetch origin --timeout=10`,
+        "Fetch",
+        15000 // 15 second timeout for fetch
       );
       await executeCommand(
         `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
