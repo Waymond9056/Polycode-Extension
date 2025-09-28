@@ -669,16 +669,42 @@ export class P2PUser {
 
     console.log(`Executing sync commands: ${syncCommands}`);
 
-    exec(syncCommands, (error: any, stdout: string, stderr: string) => {
-      console.log(`Sync stdout: ${stdout}`);
-      if (stderr) {
-        console.log(`Sync stderr: ${stderr}`);
-      }
+    // Use spawn instead of exec for better shell compatibility
+    const { spawn } = require("child_process");
 
-      if (error) {
-        console.error(`Error executing sync commands: ${error}`);
-        console.error(`Error code: ${error.code}`);
-        console.error(`Error signal: ${error.signal}`);
+    console.log(`Starting sync process in: ${workspacePath}`);
+
+    // Use bash explicitly and pass commands as arguments
+    const child = spawn("bash", ["-c", syncCommands], {
+      cwd: workspacePath,
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      const output = data.toString();
+      stdout += output;
+      console.log(`Sync output: ${output}`);
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      const output = data.toString();
+      stderr += output;
+      console.log(`Sync error: ${output}`);
+    });
+
+    child.on("close", (code: number | null) => {
+      console.log(`Sync process exited with code: ${code}`);
+      console.log(`Final stdout: ${stdout}`);
+      console.log(`Final stderr: ${stderr}`);
+
+      if (code === 0) {
+        vscode.window.showInformationMessage(`Workspace synced successfully`);
+      } else {
+        console.error(`Sync failed with exit code: ${code}`);
 
         // Check for specific error conditions
         if (stderr.includes("fatal: not a git repository")) {
@@ -697,27 +723,14 @@ export class P2PUser {
             `Sync completed with merge conflicts. Please resolve conflicts manually.`
           );
         } else {
-          vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+          vscode.window.showErrorMessage(`Sync failed with exit code: ${code}`);
         }
-        return;
       }
+    });
 
-      vscode.window.showInformationMessage(`Workspace synced successfully`);
-
-      // Ensure reset and pull always happen as a safety measure
-      console.log("Running safety reset and pull...");
-      const safetyCommands = `cd "${workspacePath}" && git reset --hard origin/main && git pull`;
-
-      exec(
-        safetyCommands,
-        (safetyError: any, safetyStdout: string, safetyStderr: string) => {
-          if (safetyError) {
-            console.error(`Safety sync failed: ${safetyError}`);
-          } else {
-            console.log(`Safety sync completed: ${safetyStdout}`);
-          }
-        }
-      );
+    child.on("error", (error: Error) => {
+      console.error(`Failed to start sync process: ${error}`);
+      vscode.window.showErrorMessage(`Failed to start sync: ${error.message}`);
     });
   }
 }
