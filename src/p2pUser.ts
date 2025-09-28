@@ -641,20 +641,6 @@ export class P2PUser {
       setSyncInProgress(true);
       console.log("Sync flag set to true - blocking CRDT updates");
 
-      // More robust sync with retry mechanism
-      const syncScript = `
-        git clean -fd && 
-        git reset --hard HEAD && 
-        git fetch origin && 
-        sleep 2 && 
-        git fetch origin && 
-        git reset --hard origin/main && 
-        git pull &&
-        git status
-      `
-        .replace(/\s+/g, " ")
-        .trim();
-
       const { exec } = require("child_process");
       const { promisify } = require("util");
       const execAsync = promisify(exec);
@@ -670,18 +656,23 @@ export class P2PUser {
       const workspacePath = activeWorkspace.uri.fsPath;
       console.log(`Syncing in workspace: ${workspacePath}`);
 
-      // Execute the complete sync command as one operation with timeout
+      // Run git commands individually to avoid timeout issues
       try {
-        console.log("Starting main sync script...");
-        await Promise.race([
-          execAsync(syncScript, { cwd: workspacePath }),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Sync script timeout")), 30000)
-          ),
-        ]);
-        console.log("Main sync script completed successfully");
+        console.log("Running git clean...");
+        await execAsync("git clean -fd", { cwd: workspacePath });
+
+        console.log("Running git reset --hard HEAD...");
+        await execAsync("git reset --hard HEAD", { cwd: workspacePath });
+
+        console.log("Running git fetch origin...");
+        await execAsync("git fetch origin", { cwd: workspacePath });
+
+        console.log("Running git reset --hard origin/main...");
+        await execAsync("git reset --hard origin/main", { cwd: workspacePath });
+
+        console.log("Main sync commands completed successfully");
       } catch (syncError: any) {
-        console.log("Main sync script had issues:", syncError.message);
+        console.log("Main sync commands had issues:", syncError.message);
         // Continue anyway to run the independent git pull
       }
 
