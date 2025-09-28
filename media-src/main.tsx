@@ -33,6 +33,7 @@ function App() {
   >("loading");
   const [hasInitialized, setHasInitialized] = React.useState<boolean>(false);
   const [hasGitRepository, setHasGitRepository] = React.useState<boolean | null>(null);
+  const [setupCompleted, setSetupCompleted] = React.useState<boolean>(vscode.getState()?.setupCompleted || false);
   const [githubUrl, setGithubUrl] = React.useState<string>("");
   const [isNetworkConnected, setIsNetworkConnected] = React.useState<boolean>(false);
   const [dockerEnabled, setDockerEnabled] = React.useState<boolean>(false);
@@ -275,7 +276,7 @@ function App() {
         if (networkReady && !wasConnected) {
           // Network just became ready, switch to appropriate page
           setHasInitialized(true);
-          const newPage = hasGitRepository === false ? "setup" : "main";
+          const newPage = (!setupCompleted && (hasGitRepository === false || hasGitRepository === null)) ? "setup" : "main";
           setCurrentPage(newPage);
           vscode.setState({ ...vscode.getState(), hasInitialized: true, currentPage: newPage });
         } else if (!networkReady && wasConnected) {
@@ -302,8 +303,8 @@ function App() {
         const wasGitRepository = hasGitRepository;
         setHasGitRepository(message.hasGitRepository);
         
-        // Only change page if git status changed and network is ready
-        if (!message.hasGitRepository && isNetworkConnected && wasGitRepository !== false) {
+        // Navigate to setup page if no git repository, network is ready, and setup not completed
+        if (!message.hasGitRepository && isNetworkConnected && !setupCompleted) {
           setCurrentPage("setup");
           vscode.setState({ ...vscode.getState(), currentPage: "setup" });
         }
@@ -322,6 +323,18 @@ function App() {
             java: message.supportedLanguages.includes('java'),
             typescript: message.supportedLanguages.includes('typescript'),
           });
+        }
+      }
+      if (message.type === "setupComplete") {
+        console.log("Setup completed:", message);
+        if (message.success) {
+          // Mark setup as completed
+          setSetupCompleted(true);
+          // Navigate to main page after successful setup
+          setCurrentPage("main");
+          vscode.setState({ ...vscode.getState(), currentPage: "main", setupCompleted: true });
+          // Update git repository status
+          setHasGitRepository(true);
         }
       }
     };

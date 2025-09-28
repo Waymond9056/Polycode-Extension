@@ -962,10 +962,39 @@ function hookMessages(
     }
     if (msg?.type === "setupConfirm" && typeof msg.githubUrl === "string") {
       console.log("Setup confirmed with GitHub URL:", msg.githubUrl);
-      // TODO: Implement git clone and setup logic
-      vscode.window.showInformationMessage(
-        `Setup confirmed for repository: ${msg.githubUrl}`
-      );
+      
+      // Execute git clone command
+      const { exec } = require("child_process");
+      const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+      if (!workspaceRoot) {
+        vscode.window.showErrorMessage("No workspace folder found");
+        return;
+      }
+
+      const cloneCommand = `cd "${workspaceRoot}" && git clone ${msg.githubUrl} .`;
+      console.log(`Executing git clone: ${cloneCommand}`);
+
+      exec(cloneCommand, (error: any, stdout: string, stderr: string) => {
+        if (error) {
+          console.error(`Error cloning repository: ${error}`);
+          vscode.window.showErrorMessage(`Failed to clone repository: ${error.message}`);
+          return;
+        }
+        if (stderr) {
+          console.log(`Git clone stderr: ${stderr}`);
+        }
+        console.log(`Git clone stdout: ${stdout}`);
+        vscode.window.showInformationMessage(
+          `Successfully cloned repository: ${msg.githubUrl}`
+        );
+        
+        // Notify the webview that setup is complete
+        webview.postMessage({
+          type: "setupComplete",
+          success: true,
+          message: "Repository cloned successfully"
+        });
+      });
     }
     if (msg?.type === "dockerSetup" && msg.enabled && msg.languages) {
       console.log("Docker setup confirmed with languages:", msg.languages, "rebuild:", msg.rebuild);
