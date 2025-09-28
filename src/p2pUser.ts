@@ -639,6 +639,7 @@ export class P2PUser {
     try {
       // Set sync flag to prevent CRDT updates
       setSyncInProgress(true);
+      console.log("Sync flag set to true - blocking CRDT updates");
 
       // More robust sync with retry mechanism
       const syncScript = `
@@ -669,9 +670,15 @@ export class P2PUser {
       const workspacePath = activeWorkspace.uri.fsPath;
       console.log(`Syncing in workspace: ${workspacePath}`);
 
-      // Execute the complete sync command as one operation
+      // Execute the complete sync command as one operation with timeout
       try {
-        await execAsync(syncScript, { cwd: workspacePath });
+        console.log("Starting main sync script...");
+        await Promise.race([
+          execAsync(syncScript, { cwd: workspacePath }),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Sync script timeout")), 30000)
+          ),
+        ]);
         console.log("Main sync script completed successfully");
       } catch (syncError: any) {
         console.log("Main sync script had issues:", syncError.message);
@@ -706,6 +713,7 @@ export class P2PUser {
       vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
     } finally {
       // Always reset the sync flag
+      console.log("Resetting sync flag to false - re-enabling CRDT updates");
       setSyncInProgress(false);
     }
   }
