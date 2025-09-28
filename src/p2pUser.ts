@@ -667,8 +667,21 @@ export class P2PUser {
         console.log("Git reset HEAD completed");
 
         console.log("Running git fetch origin...");
-        await execAsync("git fetch origin", { cwd: workspacePath });
-        console.log("Git fetch completed");
+        try {
+          const fetchPromise = execAsync("git fetch origin", {
+            cwd: workspacePath,
+          });
+          const fetchTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Git fetch timeout")), 15000)
+          );
+          await Promise.race([fetchPromise, fetchTimeout]);
+          console.log("Git fetch completed");
+        } catch (fetchError: any) {
+          console.log(
+            "Git fetch had issues (continuing anyway):",
+            fetchError.message
+          );
+        }
 
         console.log("Running git reset --hard origin/main...");
         await execAsync("git reset --hard origin/main", { cwd: workspacePath });
