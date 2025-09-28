@@ -133,7 +133,7 @@ function App() {
     console.log("Manual sync requested");
     vscode.postMessage({
       type: "executeShell",
-      script: "git fetch origin && git reset --hard origin/main && git pull",
+      script: "git reset --hard origin/main && git pull",
     });
   };
 

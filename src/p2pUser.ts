@@ -651,7 +651,6 @@ export class P2PUser {
       console.log(`Syncing in workspace: ${workspacePath}`);
 
       // Execute sync commands
-      await execAsync("git fetch origin", { cwd: workspacePath });
       await execAsync("git reset --hard origin/main", { cwd: workspacePath });
       await execAsync("git pull", { cwd: workspacePath });
 
