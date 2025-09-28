@@ -96,8 +96,8 @@ function App() {
       ? `${commitTitle}: ${commitMessage}`
       : commitTitle;
 
-    // Use the improved GitHub save script
-    const script = `./src/github_utils/save.sh "${fullMessage}"`;
+    // Use inline git commands for now to avoid path issues
+    const script = `git checkout -b Saving && git add . && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
     vscode.postMessage({
       type: "executeShell",
       script: script,
@@ -133,7 +133,7 @@ function App() {
     console.log("Manual sync requested");
     vscode.postMessage({
       type: "executeShell",
-      script: "./src/github_utils/sync.sh",
+      script: "git fetch origin && git reset --hard origin/main && git pull",
     });
   };
 

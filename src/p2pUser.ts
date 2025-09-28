@@ -634,24 +634,33 @@ export class P2PUser {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     console.log("Delay completed, starting sync...");
 
-    // Use the improved sync script instead of complex git commands
+    // Use inline git commands for reliable sync
     try {
-      const success = await this.syncFromGitHub();
-      if (success) {
-        vscode.window.showInformationMessage(
-          `Workspace synced successfully from peer ${message.peerId?.substring(
-            0,
-            8
-          )}...`
-        );
-      } else {
-        vscode.window.showErrorMessage(
-          `Failed to sync workspace from peer ${message.peerId?.substring(
-            0,
-            8
-          )}...`
-        );
+      const { exec } = require("child_process");
+      const { promisify } = require("util");
+      const execAsync = promisify(exec);
+
+      // Get the active workspace folder
+      const activeWorkspace = vscode.workspace.workspaceFolders?.[0];
+      if (!activeWorkspace) {
+        vscode.window.showErrorMessage("No active workspace found for sync");
+        return;
       }
+
+      const workspacePath = activeWorkspace.uri.fsPath;
+      console.log(`Syncing in workspace: ${workspacePath}`);
+
+      // Execute sync commands
+      await execAsync("git fetch origin", { cwd: workspacePath });
+      await execAsync("git reset --hard origin/main", { cwd: workspacePath });
+      await execAsync("git pull", { cwd: workspacePath });
+
+      vscode.window.showInformationMessage(
+        `Workspace synced successfully from peer ${message.peerId?.substring(
+          0,
+          8
+        )}...`
+      );
     } catch (error: any) {
       console.error(`Sync failed: ${error.message}`);
       vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
