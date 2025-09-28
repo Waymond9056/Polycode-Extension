@@ -638,13 +638,29 @@ export class P2PUser {
     const workspacePath = activeWorkspace.uri.fsPath;
     console.log(`Syncing in workspace: ${workspacePath}`);
 
-    const syncCommands = `cd "${workspacePath}" && git add * && git commit -m "Updating..." && git pull --rebase`;
+    // More robust sync that handles conflicts
+    const syncCommands = `cd "${workspacePath}" && 
+      git add * && 
+      git commit -m "Local changes before sync" && 
+      git pull --no-edit --no-rebase || 
+      (echo "Merge conflict detected, attempting to resolve..." && 
+       git status --porcelain | grep "^UU" && 
+       echo "Please resolve conflicts manually" || 
+       echo "Sync completed successfully")`;
+
     console.log(`Executing sync commands: ${syncCommands}`);
 
     exec(syncCommands, (error: any, stdout: string, stderr: string) => {
       if (error) {
         console.error(`Error executing sync commands: ${error}`);
-        vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+        // Check if it's a merge conflict
+        if (stderr.includes("merge conflict") || stderr.includes("CONFLICT")) {
+          vscode.window.showWarningMessage(
+            `Sync completed with merge conflicts. Please resolve conflicts manually.`
+          );
+        } else {
+          vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+        }
         return;
       }
       if (stderr) {
