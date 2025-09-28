@@ -46,6 +46,20 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
+      // Check if this is a Git-related file that should be excluded
+      const filePath = event.document.uri.fsPath;
+      const isGitFile =
+        filePath.includes("/.git/") ||
+        filePath.includes("\\.git\\") ||
+        filePath.endsWith(".git") ||
+        filePath.includes(".gitignore") ||
+        filePath.includes(".gitattributes");
+
+      if (isGitFile) {
+        console.log("Skipping Git-related file:", filePath);
+        return;
+      }
+
       // Send changes for any file in the workspace to enable synchronous collaboration
       console.log(
         "Text document changed in file:",
@@ -455,6 +469,20 @@ async function applyCRDTUpdatesToFile(updates: any[]) {
       return;
     }
 
+    // Check if this is a Git-related file that should be excluded
+    const isGitFile =
+      documentPath.includes("/.git/") ||
+      documentPath.includes("\\.git\\") ||
+      documentPath.endsWith(".git") ||
+      documentPath.includes(".gitignore") ||
+      documentPath.includes(".gitattributes");
+
+    if (isGitFile) {
+      console.log("Skipping Git-related file update:", documentPath);
+      isApplyingCRDTUpdate = false;
+      return;
+    }
+
     // Resolve relative path to absolute URI
     let targetUri: vscode.Uri;
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -523,10 +551,12 @@ async function applyCRDTOperation(editor: vscode.TextEditor, operation: any) {
       borderStyle: "solid",
       borderColor: "red",
       borderWidth: "1px",
-      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+      rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed,
     });
 
-    editor.setDecorations(decorationType, [new vscode.Range(position, position)]);
+    editor.setDecorations(decorationType, [
+      new vscode.Range(position, position),
+    ]);
     activeCursorDecorations.push(decorationType);
 
     editor
