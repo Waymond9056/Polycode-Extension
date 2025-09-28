@@ -1,0 +1,9 @@
+# Create a working directory for mounted code
+WORKDIR /app
+
+# Create a simple entrypoint script
+COPY entrypoint2.sh /entrypoint2.sh
+RUN chmod +x /entrypoint2.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/entrypoint2.sh"]

@@ -1,0 +1,2 @@
+# Install Java JDK for source code compilation
+RUN apk add --no-cache openjdk11

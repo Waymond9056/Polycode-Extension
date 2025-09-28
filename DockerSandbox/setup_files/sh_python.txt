@@ -1,0 +1,4 @@
+    "py")
+        echo "Running Python file..."
+        python3 "$1"
+        ;;

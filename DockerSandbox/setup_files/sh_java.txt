@@ -1,0 +1,11 @@
+    "java")
+        echo "Compiling Java file..."
+        javac "$1"
+        if [ $? -eq 0 ]; then
+            echo "Running compiled Java file..."
+            java "$FILE_NAME"
+        else
+            echo "Java compilation failed!"
+            exit 1
+        fi
+        ;;
