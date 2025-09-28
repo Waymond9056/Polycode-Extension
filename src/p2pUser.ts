@@ -724,6 +724,15 @@ export class P2PUser {
         "Remote check"
       );
       await executeCommand(
+        `echo "=== Fetching latest ===" && git fetch origin`,
+        "Fetch",
+        15000 // 15 second timeout for fetch
+      );
+      await executeCommand(
+        `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
+        "Remote main check"
+      );
+      await executeCommand(
         `echo "=== Resetting to origin/main ===" && git reset --hard origin/main`,
         "Reset to origin/main"
       );
