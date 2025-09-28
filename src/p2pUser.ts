@@ -724,7 +724,7 @@ export class P2PUser {
         "Remote check"
       );
       await executeCommand(
-        `echo "=== Fetching latest ===" && git fetch origin --timeout=10`,
+        `echo "=== Fetching latest ===" && git fetch origin`,
         "Fetch",
         15000 // 15 second timeout for fetch
       );
