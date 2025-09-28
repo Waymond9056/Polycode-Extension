@@ -626,8 +626,8 @@ export class P2PUser {
       `Sync request received: ${message.message}`
     );
 
-    // Reduced delay to 2 seconds for faster sync
-    const delayMs = 2000; // 2 seconds delay
+    // Increased delay to 5 seconds to ensure push has propagated
+    const delayMs = 5000; // 5 seconds delay
     console.log(
       `Waiting ${delayMs}ms before syncing to ensure remote changes are available...`
     );
@@ -640,8 +640,18 @@ export class P2PUser {
       // Set sync flag to prevent CRDT updates
       setSyncInProgress(true);
 
-      const syncScript =
-        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull";
+      // More robust sync with retry mechanism
+      const syncScript = `
+        git clean -fd && 
+        git reset --hard HEAD && 
+        git fetch origin && 
+        sleep 2 && 
+        git fetch origin && 
+        git reset --hard origin/main && 
+        git pull origin main
+      `
+        .replace(/\s+/g, " ")
+        .trim();
 
       const { exec } = require("child_process");
       const { promisify } = require("util");
