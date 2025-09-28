@@ -639,16 +639,7 @@ export class P2PUser {
     console.log(`Syncing in workspace: ${workspacePath}`);
 
     // Complete sync strategy - ensure all steps execute properly
-    const syncCommands = `cd "${workspacePath}" && 
-      echo "=== Starting sync process ===" && 
-      git status && 
-      echo "=== Adding all changes ===" && 
-      git add . && 
-      echo "=== Committing local changes ===" && 
-      git commit -m "Local changes before sync" || echo "No local changes to commit" && 
-      echo "=== Fetching latest changes ===" && 
-      git fetch origin && 
-      echo "=== Resetting to remote main ===" && 
+    const syncCommands = `cd "${workspacePath}" &&
       git reset --hard origin/main && 
       echo "=== Pulling latest changes ===" && 
       git pull && 
