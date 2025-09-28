@@ -723,29 +723,15 @@ export class P2PUser {
         `echo "=== Remote status ===" && git remote -v`,
         "Remote check"
       );
-      // Try fetch with shorter timeout, but don't fail if it times out
-      try {
-        await executeCommand(
-          `echo "=== Fetching latest ===" && git fetch origin`,
-          "Fetch",
-          10000 // 10 second timeout for fetch
-        );
-      } catch (fetchError) {
-        console.log(
-          `Fetch failed or timed out, continuing with sync: ${fetchError}`
-        );
-        // Continue with sync even if fetch fails
-      }
-
-      // Skip remote main check if fetch failed
-      try {
-        await executeCommand(
-          `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
-          "Remote main check"
-        );
-      } catch (remoteError) {
-        console.log(`Remote main check failed, continuing: ${remoteError}`);
-      }
+      await executeCommand(
+        `echo "=== Fetching latest ===" && git fetch origin`,
+        "Fetch",
+        15000 // 15 second timeout for fetch
+      );
+      await executeCommand(
+        `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
+        "Remote main check"
+      );
       await executeCommand(
         `echo "=== Resetting to origin/main ===" && git reset --hard origin/main`,
         "Reset to origin/main"
