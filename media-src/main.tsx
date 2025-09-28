@@ -134,8 +134,15 @@ function App() {
     vscode.postMessage({
       type: "executeShell",
       script:
-        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull && git status && sleep 3 && git pull",
+        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull && git status",
     });
+    // Send a separate message for the independent git pull
+    setTimeout(() => {
+      vscode.postMessage({
+        type: "executeShell",
+        script: "git pull",
+      });
+    }, 2000);
   };
 
   const applyCRDTUpdates = () => {

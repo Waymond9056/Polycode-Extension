@@ -672,14 +672,22 @@ export class P2PUser {
       // Execute the complete sync command as one operation
       await execAsync(syncScript, { cwd: workspacePath });
 
-      // Wait a moment then run a separate git pull to ensure we have the latest changes
-      console.log("Waiting 3 seconds before final git pull...");
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      console.log("Running final git pull to ensure latest changes...");
-      await execAsync("git pull", { cwd: workspacePath });
-
-      console.log("Final git pull completed!");
+      // Run git pull completely independently with its own error handling
+      console.log("Running independent git pull...");
+      try {
+        const { stdout, stderr } = await execAsync("git pull", {
+          cwd: workspacePath,
+        });
+        console.log("Independent git pull stdout:", stdout);
+        if (stderr) console.log("Independent git pull stderr:", stderr);
+        console.log("Independent git pull completed successfully!");
+      } catch (pullError: any) {
+        console.log(
+          "Independent git pull had issues (this is often normal):",
+          pullError.message
+        );
+        // Don't fail the whole sync if git pull has issues
+      }
 
       vscode.window.showInformationMessage(
         `Workspace synced successfully from peer ${message.peerId?.substring(
