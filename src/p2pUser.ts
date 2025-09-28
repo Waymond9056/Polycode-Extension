@@ -670,10 +670,16 @@ export class P2PUser {
       console.log(`Syncing in workspace: ${workspacePath}`);
 
       // Execute the complete sync command as one operation
-      await execAsync(syncScript, { cwd: workspacePath });
+      try {
+        await execAsync(syncScript, { cwd: workspacePath });
+        console.log("Main sync script completed successfully");
+      } catch (syncError: any) {
+        console.log("Main sync script had issues:", syncError.message);
+        // Continue anyway to run the independent git pull
+      }
 
-      // Run git pull completely independently with its own error handling
-      console.log("Running independent git pull...");
+      // ALWAYS run git pull completely independently, regardless of what happened above
+      console.log("=== RUNNING INDEPENDENT GIT PULL ===");
       try {
         const { stdout, stderr } = await execAsync("git pull", {
           cwd: workspacePath,
