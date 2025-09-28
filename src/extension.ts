@@ -13,7 +13,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize P2P User for real-time collaboration
   // Both users can now send and receive messages bidirectionally
-  const p2pUser = new P2PUser("polycode", CLIENT_ID, applyCRDTUpdatesToFile);
+  const p2pUser = new P2PUser("polycode3", CLIENT_ID, applyCRDTUpdatesToFile);
   context.subscriptions.push({
     dispose: async () => {
       await p2pUser.stop();
