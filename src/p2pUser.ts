@@ -650,9 +650,12 @@ export class P2PUser {
       const workspacePath = activeWorkspace.uri.fsPath;
       console.log(`Syncing in workspace: ${workspacePath}`);
 
-      // Execute sync commands
-      await execAsync("git reset --hard origin/main", { cwd: workspacePath });
-      await execAsync("git pull", { cwd: workspacePath });
+      // Execute sync commands - first clean working directory, then reset and pull
+      await execAsync("git clean -fd", { cwd: workspacePath }); // Remove untracked files and directories
+      await execAsync("git reset --hard HEAD", { cwd: workspacePath }); // Reset any staged changes
+      await execAsync("git fetch origin", { cwd: workspacePath }); // Fetch latest from remote
+      await execAsync("git reset --hard origin/main", { cwd: workspacePath }); // Reset to remote main
+      await execAsync("git pull", { cwd: workspacePath }); // Pull any additional changes
 
       vscode.window.showInformationMessage(
         `Workspace synced successfully from peer ${message.peerId?.substring(
