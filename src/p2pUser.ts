@@ -644,102 +644,99 @@ export class P2PUser {
     const workspacePath = activeWorkspace.uri.fsPath;
     console.log(`Syncing in workspace: ${workspacePath}`);
 
-    // Enhanced sync strategy with better debugging
-    const syncCommands = `cd "${workspacePath}" &&
-      echo "=== Current branch ===" && 
-      git branch -v && 
-      echo "=== Remote status ===" && 
-      git remote -v && 
-      echo "=== Fetching latest ===" && 
-      git fetch origin && 
-      echo "=== Remote main status ===" && 
-      git log --oneline origin/main -5 && 
-      echo "=== Resetting to origin/main ===" && 
-      git reset --hard origin/main && 
-      echo "=== Pulling latest changes ===" && 
-      git pull && 
-      echo "=== Final status ===" && 
-      git status && 
-      echo "=== Current commit ===" && 
-      git log --oneline -3 && 
-      echo "=== Sync completed successfully ==="`;
-
-    console.log(`Executing sync commands: ${syncCommands}`);
-
     // Use spawn instead of exec for better shell compatibility
     const { spawn } = require("child_process");
 
     console.log(`Starting sync process in: ${workspacePath}`);
-    console.log(`Sync commands: ${syncCommands}`);
 
-    // Use bash explicitly and pass commands as arguments
-    const child = spawn("bash", ["-c", syncCommands], {
-      cwd: workspacePath,
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
-    });
+    // Execute commands step by step for better reliability
+    const executeCommand = (
+      command: string,
+      description: string
+    ): Promise<void> => {
+      return new Promise((resolve, reject) => {
+        console.log(`Executing: ${description}`);
+        const child = spawn("bash", ["-c", command], {
+          cwd: workspacePath,
+          stdio: ["pipe", "pipe", "pipe"],
+          shell: true,
+        });
 
-    console.log(`Spawn process started with PID: ${child.pid}`);
+        let stdout = "";
+        let stderr = "";
 
-    let stdout = "";
-    let stderr = "";
+        child.stdout.on("data", (data: Buffer) => {
+          const output = data.toString();
+          stdout += output;
+          console.log(`${description} output: ${output}`);
+        });
 
-    child.stdout.on("data", (data: Buffer) => {
-      const output = data.toString();
-      stdout += output;
-      console.log(`Sync output: ${output}`);
-    });
+        child.stderr.on("data", (data: Buffer) => {
+          const output = data.toString();
+          stderr += output;
+          console.log(`${description} error: ${output}`);
+        });
 
-    child.stderr.on("data", (data: Buffer) => {
-      const output = data.toString();
-      stderr += output;
-      console.log(`Sync error: ${output}`);
-    });
+        child.on("close", (code: number | null) => {
+          console.log(`${description} exited with code: ${code}`);
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(
+              new Error(`${description} failed with code ${code}: ${stderr}`)
+            );
+          }
+        });
 
-    // Add timeout to prevent hanging
-    const timeout = setTimeout(() => {
-      console.log("Sync process timed out, killing process...");
-      child.kill("SIGTERM");
-      vscode.window.showWarningMessage("Sync process timed out");
-    }, 60000); // 60 second timeout
+        child.on("error", (error: Error) => {
+          reject(new Error(`${description} process error: ${error.message}`));
+        });
+      });
+    };
 
-    child.on("close", (code: number | null) => {
-      clearTimeout(timeout);
-      console.log(`Sync process exited with code: ${code}`);
-      console.log(`Final stdout: ${stdout}`);
-      console.log(`Final stderr: ${stderr}`);
+    try {
+      // Execute sync commands step by step
+      await executeCommand(
+        `echo "=== Current branch ===" && git branch -v`,
+        "Branch check"
+      );
+      await executeCommand(
+        `echo "=== Remote status ===" && git remote -v`,
+        "Remote check"
+      );
+      await executeCommand(
+        `echo "=== Fetching latest ===" && git fetch origin`,
+        "Fetch"
+      );
+      await executeCommand(
+        `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
+        "Remote main check"
+      );
+      await executeCommand(
+        `echo "=== Resetting to origin/main ===" && git reset --hard origin/main`,
+        "Reset to origin/main"
+      );
+      await executeCommand(
+        `echo "=== Pulling latest changes ===" && git pull`,
+        "Pull"
+      );
+      await executeCommand(
+        `echo "=== Final status ===" && git status`,
+        "Final status"
+      );
+      await executeCommand(
+        `echo "=== Current commit ===" && git log --oneline -3`,
+        "Current commit"
+      );
+      await executeCommand(
+        `echo "=== Sync completed successfully ==="`,
+        "Success message"
+      );
 
-      if (code === 0) {
-        vscode.window.showInformationMessage(`Workspace synced successfully`);
-      } else {
-        console.error(`Sync failed with exit code: ${code}`);
-
-        // Check for specific error conditions
-        if (stderr.includes("fatal: not a git repository")) {
-          vscode.window.showErrorMessage(
-            `Sync failed: Not a git repository in ${workspacePath}`
-          );
-        } else if (stderr.includes("fatal: couldn't find remote ref")) {
-          vscode.window.showErrorMessage(
-            `Sync failed: Remote branch 'main' not found. Make sure the repository has a 'main' branch.`
-          );
-        } else if (
-          stderr.includes("merge conflict") ||
-          stderr.includes("CONFLICT")
-        ) {
-          vscode.window.showWarningMessage(
-            `Sync completed with merge conflicts. Please resolve conflicts manually.`
-          );
-        } else {
-          vscode.window.showErrorMessage(`Sync failed with exit code: ${code}`);
-        }
-      }
-    });
-
-    child.on("error", (error: Error) => {
-      clearTimeout(timeout);
-      console.error(`Failed to start sync process: ${error}`);
-      vscode.window.showErrorMessage(`Failed to start sync: ${error.message}`);
-    });
+      vscode.window.showInformationMessage(`Workspace synced successfully`);
+    } catch (error: any) {
+      console.error(`Sync failed: ${error.message}`);
+      vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+    }
   }
 }
