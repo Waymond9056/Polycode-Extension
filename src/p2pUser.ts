@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import Hyperswarm from "hyperswarm";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { setSyncInProgress } from "./extension";
 
 const execAsync = promisify(exec);
 
@@ -634,8 +635,14 @@ export class P2PUser {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     console.log("Delay completed, starting sync...");
 
-    // Use inline git commands for reliable sync
+    // Use the extension's sync flag to prevent CRDT updates during sync
     try {
+      // Set sync flag to prevent CRDT updates
+      setSyncInProgress(true);
+
+      const syncScript =
+        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull";
+
       const { exec } = require("child_process");
       const { promisify } = require("util");
       const execAsync = promisify(exec);
@@ -644,18 +651,15 @@ export class P2PUser {
       const activeWorkspace = vscode.workspace.workspaceFolders?.[0];
       if (!activeWorkspace) {
         vscode.window.showErrorMessage("No active workspace found for sync");
+        setSyncInProgress(false); // Reset flag on error
         return;
       }
 
       const workspacePath = activeWorkspace.uri.fsPath;
       console.log(`Syncing in workspace: ${workspacePath}`);
 
-      // Execute sync commands - first clean working directory, then reset and pull
-      await execAsync("git clean -fd", { cwd: workspacePath }); // Remove untracked files and directories
-      await execAsync("git reset --hard HEAD", { cwd: workspacePath }); // Reset any staged changes
-      await execAsync("git fetch origin", { cwd: workspacePath }); // Fetch latest from remote
-      await execAsync("git reset --hard origin/main", { cwd: workspacePath }); // Reset to remote main
-      await execAsync("git pull", { cwd: workspacePath }); // Pull any additional changes
+      // Execute the complete sync command as one operation
+      await execAsync(syncScript, { cwd: workspacePath });
 
       vscode.window.showInformationMessage(
         `Workspace synced successfully from peer ${message.peerId?.substring(
@@ -666,6 +670,9 @@ export class P2PUser {
     } catch (error: any) {
       console.error(`Sync failed: ${error.message}`);
       vscode.window.showErrorMessage(`Sync failed: ${error.message}`);
+    } finally {
+      // Always reset the sync flag
+      setSyncInProgress(false);
     }
   }
 }

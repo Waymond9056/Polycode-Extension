@@ -9,6 +9,14 @@ const CLIENT_ID = randomBytes(8).toString("hex");
 let isApplyingCRDTUpdate = false;
 // Flag to prevent CRDT updates during save operations
 let isSaveInProgress = false;
+// Flag to prevent CRDT updates during sync operations
+let isSyncInProgress = false;
+
+// Export function to set sync flag from P2P user
+export function setSyncInProgress(value: boolean) {
+  isSyncInProgress = value;
+  console.log(`Sync flag set to: ${value}`);
+}
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Polycode extension activated with client ID:", CLIENT_ID);
@@ -46,6 +54,14 @@ export function activate(context: vscode.ExtensionContext) {
       if (isSaveInProgress) {
         console.log(
           "Skipping document change event - save operation in progress"
+        );
+        return;
+      }
+
+      // Skip if a sync operation is in progress to prevent conflicts
+      if (isSyncInProgress) {
+        console.log(
+          "Skipping document change event - sync operation in progress"
         );
         return;
       }
@@ -200,6 +216,15 @@ function hookMessages(
         console.log("Save operation started - blocking CRDT updates");
       }
 
+      // Set sync in progress flag for sync operations
+      if (
+        msg.script.includes("git clean -fd") ||
+        msg.script.includes("git reset --hard origin/main")
+      ) {
+        isSyncInProgress = true;
+        console.log("Sync operation started - blocking CRDT updates");
+      }
+
       const fullScript = `cd "${workspaceRoot}" && ${msg.script}`;
       console.log(`Executing: ${fullScript}`);
 
@@ -211,6 +236,12 @@ function hookMessages(
           if (isSaveInProgress) {
             isSaveInProgress = false;
             console.log("Save operation failed - re-enabling CRDT updates");
+          }
+
+          // Reset sync flag on error
+          if (isSyncInProgress) {
+            isSyncInProgress = false;
+            console.log("Sync operation failed - re-enabling CRDT updates");
           }
           return;
         }
@@ -226,6 +257,12 @@ function hookMessages(
         if (isSaveInProgress) {
           isSaveInProgress = false;
           console.log("Save operation completed - re-enabling CRDT updates");
+        }
+
+        // Reset sync flag after successful execution
+        if (isSyncInProgress) {
+          isSyncInProgress = false;
+          console.log("Sync operation completed - re-enabling CRDT updates");
         }
 
         // If this was a save command, notify other peers to sync
