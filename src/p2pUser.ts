@@ -74,13 +74,15 @@ export class P2PUser {
   }
 
   private generateMessageId(): string {
-    return `${this.clientId}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    return `${this.clientId}-${Date.now()}-${Math.random()
+      .toString(36)
+      .substring(2, 8)}`;
   }
 
   private cleanupOldMessages(): void {
     const now = Date.now();
     const maxAge = 5 * 60 * 1000; // 5 minutes
-    
+
     for (const [messageId, timestamp] of this.messageHistory.entries()) {
       if (now - timestamp > maxAge) {
         this.messageHistory.delete(messageId);
@@ -186,7 +188,7 @@ export class P2PUser {
       this.startMessageCleanup();
 
       this.isStarted = true;
-      
+
       // Notify that P2P is ready (even without peers)
       console.log("🎉 P2P network is ready for connections");
     } catch (error) {
@@ -296,9 +298,12 @@ export class P2PUser {
     }
   }
 
-  private async handleMessage(message: P2PMessage, senderConnection?: any): Promise<void> {
+  private async handleMessage(
+    message: P2PMessage,
+    senderConnection?: any
+  ): Promise<void> {
     console.log("Received P2P message:", message);
-    
+
     // Check if we've already seen this message to prevent loops
     if (message.messageId && this.seenMessages.has(message.messageId)) {
       console.log("Ignoring duplicate message:", message.messageId);
@@ -341,8 +346,6 @@ export class P2PUser {
       }
     }
 
-    
-
     // Process the message locally
     switch (message.type) {
       case "crdt_update":
@@ -374,10 +377,12 @@ export class P2PUser {
       const forwardedMessage = {
         ...message,
         ttl: message.ttl - 1,
-        forwardedBy: this.clientId
+        forwardedBy: this.clientId,
       };
-      
-      console.log(`Forwarding message ${message.messageId} with TTL ${forwardedMessage.ttl}`);
+
+      console.log(
+        `Forwarding message ${message.messageId} with TTL ${forwardedMessage.ttl}`
+      );
       await this.broadcastToSwarm(forwardedMessage, senderConnection);
     }
   }
@@ -422,7 +427,10 @@ export class P2PUser {
     }
   }
 
-  private async broadcastToSwarm(message: P2PMessage, excludeConnection?: any): Promise<void> {
+  private async broadcastToSwarm(
+    message: P2PMessage,
+    excludeConnection?: any
+  ): Promise<void> {
     // Add message routing metadata if not present
     if (!message.messageId) {
       message.messageId = this.generateMessageId();
@@ -633,7 +641,7 @@ export class P2PUser {
       return;
     }
 
-    const syncCommands = `cd "${workspaceRoot}" && git add * && git commit -m "Updating..." && git pull --rebase`;
+    const syncCommands = `cd "${workspaceRoot}" && git add . && git commit -m "Updating..." && git pull --rebase`;
     console.log(`Executing sync commands: ${syncCommands}`);
 
     exec(syncCommands, (error: any, stdout: string, stderr: string) => {

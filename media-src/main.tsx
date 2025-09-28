@@ -167,7 +167,7 @@ function App() {
     const fullMessage = commitMessage
       ? `${commitTitle}: ${commitMessage}`
       : commitTitle;
-    const script = `git checkout -b Saving && git add * && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
+    const script = `git checkout -b Saving && git add . && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
     vscode.postMessage({
       type: "executeShell",
       script: script,
