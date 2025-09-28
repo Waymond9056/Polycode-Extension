@@ -672,6 +672,10 @@ export class P2PUser {
       // Execute the complete sync command as one operation
       await execAsync(syncScript, { cwd: workspacePath });
 
+      // Run a separate git pull to ensure we have the latest changes
+      console.log("Running additional git pull to ensure latest changes...");
+      await execAsync("git pull", { cwd: workspacePath });
+
       vscode.window.showInformationMessage(
         `Workspace synced successfully from peer ${message.peerId?.substring(
           0,

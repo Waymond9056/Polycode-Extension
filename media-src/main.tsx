@@ -134,7 +134,7 @@ function App() {
     vscode.postMessage({
       type: "executeShell",
       script:
-        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull && git status",
+        "git clean -fd && git reset --hard HEAD && git fetch origin && git reset --hard origin/main && git pull && git status && git pull",
     });
   };
 
