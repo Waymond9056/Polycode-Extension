@@ -638,22 +638,44 @@ export class P2PUser {
     const workspacePath = activeWorkspace.uri.fsPath;
     console.log(`Syncing in workspace: ${workspacePath}`);
 
-    // Smart sync strategy - handle conflicts gracefully
+    // Robust sync strategy with better error handling
     const syncCommands = `cd "${workspacePath}" && 
       echo "Starting sync process..." && 
+      git status && 
       git add . && 
       git commit -m "Local changes before sync" || echo "No local changes to commit" && 
+      echo "Fetching latest changes..." && 
       git fetch origin && 
+      echo "Resetting to remote main..." && 
       git reset --hard origin/main && 
-      echo "Sync completed - local changes preserved in commit history"`;
+      echo "Sync completed successfully"`;
 
     console.log(`Executing sync commands: ${syncCommands}`);
 
     exec(syncCommands, (error: any, stdout: string, stderr: string) => {
+      console.log(`Sync stdout: ${stdout}`);
+      if (stderr) {
+        console.log(`Sync stderr: ${stderr}`);
+      }
+
       if (error) {
         console.error(`Error executing sync commands: ${error}`);
-        // Check if it's a merge conflict
-        if (stderr.includes("merge conflict") || stderr.includes("CONFLICT")) {
+        console.error(`Error code: ${error.code}`);
+        console.error(`Error signal: ${error.signal}`);
+
+        // Check for specific error conditions
+        if (stderr.includes("fatal: not a git repository")) {
+          vscode.window.showErrorMessage(
+            `Sync failed: Not a git repository in ${workspacePath}`
+          );
+        } else if (stderr.includes("fatal: couldn't find remote ref")) {
+          vscode.window.showErrorMessage(
+            `Sync failed: Remote branch 'main' not found. Make sure the repository has a 'main' branch.`
+          );
+        } else if (
+          stderr.includes("merge conflict") ||
+          stderr.includes("CONFLICT")
+        ) {
           vscode.window.showWarningMessage(
             `Sync completed with merge conflicts. Please resolve conflicts manually.`
           );
@@ -662,10 +684,7 @@ export class P2PUser {
         }
         return;
       }
-      if (stderr) {
-        console.log(`Sync stderr: ${stderr}`);
-      }
-      console.log(`Sync stdout: ${stdout}`);
+
       vscode.window.showInformationMessage(`Workspace synced successfully`);
     });
   }
