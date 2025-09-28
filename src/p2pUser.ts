@@ -660,15 +660,19 @@ export class P2PUser {
       try {
         console.log("Running git clean...");
         await execAsync("git clean -fd", { cwd: workspacePath });
+        console.log("Git clean completed");
 
         console.log("Running git reset --hard HEAD...");
         await execAsync("git reset --hard HEAD", { cwd: workspacePath });
+        console.log("Git reset HEAD completed");
 
         console.log("Running git fetch origin...");
         await execAsync("git fetch origin", { cwd: workspacePath });
+        console.log("Git fetch completed");
 
         console.log("Running git reset --hard origin/main...");
         await execAsync("git reset --hard origin/main", { cwd: workspacePath });
+        console.log("Git reset origin/main completed");
 
         console.log("Main sync commands completed successfully");
       } catch (syncError: any) {
@@ -683,9 +687,20 @@ export class P2PUser {
 
       try {
         console.log("Executing git pull now...");
-        const result = await execAsync("git pull", {
+
+        // Add timeout to git pull to prevent hanging
+        const gitPullPromise = execAsync("git pull", {
           cwd: workspacePath,
         });
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Git pull timeout after 10 seconds")),
+            10000
+          )
+        );
+
+        const result = await Promise.race([gitPullPromise, timeoutPromise]);
         console.log("Git pull result:", result);
         console.log("Independent git pull stdout:", result.stdout);
         if (result.stderr)
