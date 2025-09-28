@@ -95,7 +95,9 @@ function App() {
     const fullMessage = commitMessage
       ? `${commitTitle}: ${commitMessage}`
       : commitTitle;
-    const script = `git checkout -b Saving && git add * && git commit -m "${fullMessage}" && git checkout main && git merge Saving && git branch -d Saving && git push`;
+
+    // Use the improved GitHub save script
+    const script = `./src/github_utils/save.sh "${fullMessage}"`;
     vscode.postMessage({
       type: "executeShell",
       script: script,
@@ -124,6 +126,14 @@ function App() {
     vscode.postMessage({
       type: "sendResponseMessage",
       message: "I LOVE YOU TOO",
+    });
+  };
+
+  const manualSync = () => {
+    console.log("Manual sync requested");
+    vscode.postMessage({
+      type: "executeShell",
+      script: "./src/github_utils/sync.sh",
     });
   };
 
@@ -292,6 +302,21 @@ function App() {
           title="Run"
         >
           ▶️
+        </VSCodeButton>
+        <VSCodeButton
+          onClick={manualSync}
+          appearance="secondary"
+          style={{
+            width: "40px",
+            height: "40px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+          }}
+          title="Sync"
+        >
+          🔄
         </VSCodeButton>
         <VSCodeButton
           onClick={navigateToSettings}

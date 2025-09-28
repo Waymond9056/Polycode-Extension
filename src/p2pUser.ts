@@ -625,8 +625,8 @@ export class P2PUser {
       `Sync request received: ${message.message}`
     );
 
-    // Add delay to ensure the sender's save/commit/push completes first
-    const delayMs = 5000; // 5 seconds delay
+    // Reduced delay to 2 seconds for faster sync
+    const delayMs = 2000; // 2 seconds delay
     console.log(
       `Waiting ${delayMs}ms before syncing to ensure remote changes are available...`
     );
@@ -634,126 +634,24 @@ export class P2PUser {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     console.log("Delay completed, starting sync...");
 
-    // Get the active workspace folder (the user's project, not the extension)
-    const activeWorkspace = vscode.workspace.workspaceFolders?.[0];
-    if (!activeWorkspace) {
-      vscode.window.showErrorMessage("No active workspace found for sync");
-      return;
-    }
-
-    const workspacePath = activeWorkspace.uri.fsPath;
-    console.log(`Syncing in workspace: ${workspacePath}`);
-
-    // Use spawn instead of exec for better shell compatibility
-    const { spawn } = require("child_process");
-
-    console.log(`Starting sync process in: ${workspacePath}`);
-
-    // Execute commands step by step for better reliability
-    const executeCommand = (
-      command: string,
-      description: string,
-      timeoutMs: number = 30000
-    ): Promise<void> => {
-      return new Promise((resolve, reject) => {
-        console.log(`Executing: ${description}`);
-        const child = spawn("bash", ["-c", command], {
-          cwd: workspacePath,
-          stdio: ["pipe", "pipe", "pipe"],
-          shell: true,
-        });
-
-        let stdout = "";
-        let stderr = "";
-        let isResolved = false;
-
-        // Add timeout to prevent hanging
-        const timeout = setTimeout(() => {
-          if (!isResolved) {
-            console.log(
-              `${description} timed out after ${timeoutMs}ms, killing process...`
-            );
-            child.kill("SIGTERM");
-            reject(new Error(`${description} timed out after ${timeoutMs}ms`));
-          }
-        }, timeoutMs);
-
-        child.stdout.on("data", (data: Buffer) => {
-          const output = data.toString();
-          stdout += output;
-          console.log(`${description} output: ${output}`);
-        });
-
-        child.stderr.on("data", (data: Buffer) => {
-          const output = data.toString();
-          stderr += output;
-          console.log(`${description} error: ${output}`);
-        });
-
-        child.on("close", (code: number | null) => {
-          if (isResolved) return;
-          isResolved = true;
-          clearTimeout(timeout);
-          console.log(`${description} exited with code: ${code}`);
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(
-              new Error(`${description} failed with code ${code}: ${stderr}`)
-            );
-          }
-        });
-
-        child.on("error", (error: Error) => {
-          if (isResolved) return;
-          isResolved = true;
-          clearTimeout(timeout);
-          reject(new Error(`${description} process error: ${error.message}`));
-        });
-      });
-    };
-
+    // Use the improved sync script instead of complex git commands
     try {
-      // Execute sync commands step by step
-      await executeCommand(
-        `echo "=== Current branch ===" && git branch -v`,
-        "Branch check"
-      );
-      await executeCommand(
-        `echo "=== Remote status ===" && git remote -v`,
-        "Remote check"
-      );
-      await executeCommand(
-        `echo "=== Fetching latest ===" && git fetch origin`,
-        "Fetch",
-        15000 // 15 second timeout for fetch
-      );
-      await executeCommand(
-        `echo "=== Remote main status ===" && git log --oneline origin/main -5`,
-        "Remote main check"
-      );
-      await executeCommand(
-        `echo "=== Resetting to origin/main ===" && git reset --hard origin/main`,
-        "Reset to origin/main"
-      );
-      await executeCommand(
-        `echo "=== Pulling latest changes ===" && git pull`,
-        "Pull"
-      );
-      await executeCommand(
-        `echo "=== Final status ===" && git status`,
-        "Final status"
-      );
-      await executeCommand(
-        `echo "=== Current commit ===" && git log --oneline -3`,
-        "Current commit"
-      );
-      await executeCommand(
-        `echo "=== Sync completed successfully ==="`,
-        "Success message"
-      );
-
-      vscode.window.showInformationMessage(`Workspace synced successfully`);
+      const success = await this.syncFromGitHub();
+      if (success) {
+        vscode.window.showInformationMessage(
+          `Workspace synced successfully from peer ${message.peerId?.substring(
+            0,
+            8
+          )}...`
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          `Failed to sync workspace from peer ${message.peerId?.substring(
+            0,
+            8
+          )}...`
+        );
+      }
     } catch (error: any) {
       console.error(`Sync failed: ${error.message}`);
       vscode.window.showErrorMessage(`Sync failed: ${error.message}`);

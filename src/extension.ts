@@ -195,7 +195,10 @@ function hookMessages(
       }
 
       // Set save in progress flag for save operations
-      if (msg.script.includes("git checkout -b Saving")) {
+      if (
+        msg.script.includes("github_utils/save.sh") ||
+        msg.script.includes("git checkout -b Saving")
+      ) {
         isSaveInProgress = true;
         console.log("Save operation started - blocking CRDT updates");
       }
@@ -229,7 +232,11 @@ function hookMessages(
         }
 
         // If this was a save command, notify other peers to sync
-        if (msg.script.includes("git checkout -b Saving") && p2pUser) {
+        if (
+          (msg.script.includes("github_utils/save.sh") ||
+            msg.script.includes("git checkout -b Saving")) &&
+          p2pUser
+        ) {
           console.log("Save completed, notifying peers to sync...");
           p2pUser.broadcastMessage({
             type: "syncRequest",
