@@ -625,6 +625,15 @@ export class P2PUser {
       `Sync request received: ${message.message}`
     );
 
+    // Add delay to ensure the sender's save/commit/push completes first
+    const delayMs = 5000; // 5 seconds delay
+    console.log(
+      `Waiting ${delayMs}ms before syncing to ensure remote changes are available...`
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    console.log("Delay completed, starting sync...");
+
     // Execute git commands directly in terminal
     const { exec } = require("child_process");
 
