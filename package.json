@@ -16,11 +16,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "polycode.helloWorld",
-        "title": "Hello World",
-        "category": "Polycode"
-      },
-      {
         "command": "polycode.openPanel",
         "title": "Open Polycode Panel",
         "category": "Polycode"
@@ -50,6 +45,11 @@
           "command": "polycode.openPanel",
           "when": "view == polycode.view",
           "group": "navigation@1"
+        },
+        {
+          "command": "polycode.setSidebarSize",
+          "when": "view == polycode.view",
+          "group": "navigation@2"
         }
       ]
     }
