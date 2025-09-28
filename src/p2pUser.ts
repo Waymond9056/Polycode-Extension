@@ -634,9 +634,6 @@ export class P2PUser {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     console.log("Delay completed, starting sync...");
 
-    // Execute git commands directly in terminal
-    const { spawn } = require("child_process");
-
     // Get the active workspace folder (the user's project, not the extension)
     const activeWorkspace = vscode.workspace.workspaceFolders?.[0];
     if (!activeWorkspace) {
