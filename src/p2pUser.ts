@@ -635,7 +635,7 @@ export class P2PUser {
     console.log("Delay completed, starting sync...");
 
     // Execute git commands directly in terminal
-    const { exec } = require("child_process");
+    const { spawn } = require("child_process");
 
     // Get the active workspace folder (the user's project, not the extension)
     const activeWorkspace = vscode.workspace.workspaceFolders?.[0];
@@ -673,6 +673,7 @@ export class P2PUser {
     const { spawn } = require("child_process");
 
     console.log(`Starting sync process in: ${workspacePath}`);
+    console.log(`Sync commands: ${syncCommands}`);
 
     // Use bash explicitly and pass commands as arguments
     const child = spawn("bash", ["-c", syncCommands], {
@@ -680,6 +681,8 @@ export class P2PUser {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
     });
+
+    console.log(`Spawn process started with PID: ${child.pid}`);
 
     let stdout = "";
     let stderr = "";
@@ -696,7 +699,15 @@ export class P2PUser {
       console.log(`Sync error: ${output}`);
     });
 
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      console.log("Sync process timed out, killing process...");
+      child.kill("SIGTERM");
+      vscode.window.showWarningMessage("Sync process timed out");
+    }, 60000); // 60 second timeout
+
     child.on("close", (code: number | null) => {
+      clearTimeout(timeout);
       console.log(`Sync process exited with code: ${code}`);
       console.log(`Final stdout: ${stdout}`);
       console.log(`Final stderr: ${stderr}`);
@@ -729,6 +740,7 @@ export class P2PUser {
     });
 
     child.on("error", (error: Error) => {
+      clearTimeout(timeout);
       console.error(`Failed to start sync process: ${error}`);
       vscode.window.showErrorMessage(`Failed to start sync: ${error.message}`);
     });
