@@ -1,3 +1,6 @@
+	
+# PolyCode
+
 ## Inspiration
 The greatest part of a hackathon is stressing over code together. But that's hard to do when everyone is working on different versions of the code, bracing for the inevitable merge conflicts and "works on my machine" when mashing the code together. Indeed, in these small group settings when source control is not the priority, it would be much better if everyone could work synchronously on the same version of the codebase.
 
