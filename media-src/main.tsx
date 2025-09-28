@@ -29,8 +29,26 @@ function App() {
   const pendingUpdatesRef = React.useRef<any[]>([]);
   const [p2pStatus, setP2pStatus] = React.useState<any>(null);
   const [currentPage, setCurrentPage] = React.useState<
-    "main" | "save" | "settings"
-  >("main");
+    "main" | "save" | "settings" | "setup" | "loading"
+  >("loading");
+  const [hasInitialized, setHasInitialized] = React.useState<boolean>(false);
+  const [hasGitRepository, setHasGitRepository] = React.useState<boolean | null>(null);
+  const [githubUrl, setGithubUrl] = React.useState<string>("");
+  const [isNetworkConnected, setIsNetworkConnected] = React.useState<boolean>(false);
+  const [dockerEnabled, setDockerEnabled] = React.useState<boolean>(false);
+  const [dockerConfigured, setDockerConfigured] = React.useState<boolean>(false);
+  const [supportedLanguages, setSupportedLanguages] = React.useState<string[]>([]);
+  const [containerExists, setContainerExists] = React.useState<boolean>(false);
+  const [selectedLanguages, setSelectedLanguages] = React.useState<{
+    python: boolean;
+    java: boolean;
+    typescript: boolean;
+  }>({
+    python: false,
+    java: false,
+    typescript: false,
+  });
+
   const [commitTitle, setCommitTitle] = React.useState<string>("Saving");
   const [commitMessage, setCommitMessage] = React.useState<string>("");
   const [connectedUsers, setConnectedUsers] = React.useState<string[]>([]);
@@ -72,14 +90,19 @@ function App() {
 
   const navigateToSavePage = () => {
     setCurrentPage("save");
+    vscode.setState({ ...vscode.getState(), currentPage: "save" });
   };
 
   const navigateToMain = () => {
     setCurrentPage("main");
+    vscode.setState({ ...vscode.getState(), currentPage: "main" });
   };
 
   const navigateToSettings = () => {
     setCurrentPage("settings");
+    vscode.setState({ ...vscode.getState(), currentPage: "settings" });
+    // Request Docker status when navigating to settings
+    vscode.postMessage({ type: "getDockerStatus" });
   };
 
   const saveUserName = () => {
@@ -89,6 +112,45 @@ function App() {
       userName: userName,
     });
     setCurrentPage("main");
+    vscode.setState({ ...vscode.getState(), currentPage: "main" });
+  };
+
+  const toggleDocker = () => {
+    setDockerEnabled(!dockerEnabled);
+  };
+
+  const toggleLanguage = (language: keyof typeof selectedLanguages) => {
+    setSelectedLanguages(prev => ({
+      ...prev,
+      [language]: !prev[language]
+    }));
+  };
+
+  const confirmDockerSetup = () => {
+    const selectedLangs = Object.entries(selectedLanguages)
+      .filter(([_, selected]) => selected)
+      .map(([lang, _]) => lang);
+    
+    console.log("Confirming Docker setup with languages:", selectedLangs);
+    vscode.postMessage({
+      type: "dockerSetup",
+      enabled: dockerEnabled,
+      languages: selectedLangs,
+      rebuild: dockerConfigured, // Indicate if this is a rebuild
+    });
+    setDockerConfigured(true);
+  };
+
+  const confirmSetup = () => {
+    console.log("Confirming setup with GitHub URL:", githubUrl);
+    // TODO: Implement setup logic
+    vscode.postMessage({
+      type: "setupConfirm",
+      githubUrl: githubUrl,
+    });
+    // For now, just go back to main page
+    setCurrentPage("main");
+    vscode.setState({ ...vscode.getState(), currentPage: "main" });
   };
 
   const executeSave = () => {
@@ -101,6 +163,7 @@ function App() {
       script: script,
     });
     setCurrentPage("main"); // Navigate back to main after executing
+    vscode.setState({ ...vscode.getState(), currentPage: "main" });
   };
 
   const pingPeers = () => {
@@ -203,6 +266,23 @@ function App() {
         console.log("P2P Status received:", message);
         setP2pStatus(message);
 
+        // Check if network is ready (P2P started, even without peers)
+        const networkReady = message.isReady || false;
+        const wasConnected = isNetworkConnected;
+        setIsNetworkConnected(networkReady);
+
+        // Only change page if network status actually changed
+        if (networkReady && !wasConnected) {
+          // Network just became ready, switch to appropriate page
+          setHasInitialized(true);
+          const newPage = hasGitRepository === false ? "setup" : "main";
+          setCurrentPage(newPage);
+          vscode.setState({ ...vscode.getState(), hasInitialized: true, currentPage: newPage });
+        } else if (!networkReady && wasConnected) {
+          // Network just became not ready, show loading screen
+          setCurrentPage("loading");
+        }
+
         // Extract connected users from P2P status
         if (message.peers && Array.isArray(message.peers)) {
           const userList = message.peers.map(
@@ -215,6 +295,33 @@ function App() {
           setConnectedUsers(Array(message.peerCount).fill("Connected User"));
         } else {
           setConnectedUsers([]);
+        }
+      }
+      if (message.type === "gitStatus") {
+        console.log("Git status received:", message);
+        const wasGitRepository = hasGitRepository;
+        setHasGitRepository(message.hasGitRepository);
+        
+        // Only change page if git status changed and network is ready
+        if (!message.hasGitRepository && isNetworkConnected && wasGitRepository !== false) {
+          setCurrentPage("setup");
+          vscode.setState({ ...vscode.getState(), currentPage: "setup" });
+        }
+      }
+      if (message.type === "dockerStatus") {
+        console.log("Received Docker status:", message);
+        setDockerEnabled(message.dockerEnabled);
+        setDockerConfigured(message.dockerEnabled);
+        setSupportedLanguages(message.supportedLanguages || []);
+        setContainerExists(message.containerExists);
+        
+        // Auto-select supported languages if Docker is already configured
+        if (message.dockerEnabled && message.supportedLanguages) {
+          setSelectedLanguages({
+            python: message.supportedLanguages.includes('python'),
+            java: message.supportedLanguages.includes('java'),
+            typescript: message.supportedLanguages.includes('typescript'),
+          });
         }
       }
     };
@@ -234,14 +341,21 @@ function App() {
     };
   }, []);
 
-  // Periodically request P2P status to keep connected users updated
+  // Check network status on component mount (when sidebar opens)
   React.useEffect(() => {
-    const interval = setInterval(() => {
-      vscode.postMessage({ type: "getP2PStatus" });
-    }, 3000); // Check every 3 seconds
-
-    return () => clearInterval(interval);
+    console.log("Component mounted, checking network status...");
+    vscode.postMessage({ type: "getP2PStatus" });
   }, []);
+
+  // Periodically request P2P status to keep connected users updated
+  // Disabled to prevent overriding current page
+  // React.useEffect(() => {
+  //   const interval = setInterval(() => {
+  //     vscode.postMessage({ type: "getP2PStatus" });
+  //   }, 3000); // Check every 3 seconds
+
+  //   return () => clearInterval(interval);
+  // }, []);
 
   const renderMainPage = () => (
     <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
@@ -276,8 +390,7 @@ function App() {
         <VSCodeButton
           onClick={() =>
             vscode.postMessage({
-              type: "runCommand",
-              command: "workbench.action.debug.start",
+              type: "runFile",
             })
           }
           appearance="secondary"
@@ -289,7 +402,7 @@ function App() {
             justifyContent: "center",
             padding: 0,
           }}
-          title="Run"
+          title="Run Current File"
         >
           ▶️
         </VSCodeButton>
@@ -592,18 +705,257 @@ function App() {
             Cancel
           </VSCodeButton>
           <VSCodeButton onClick={saveUserName} appearance="primary">
-            💾 Save Name
+            Save Name
+          </VSCodeButton>
+        </div>
+
+        {/* Docker Settings Section */}
+        <div>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em" }}
+          >
+            Docker Configuration:
+          </label>
+          
+          <VSCodeButton
+            onClick={toggleDocker}
+            appearance={dockerEnabled ? "primary" : "secondary"}
+            style={{ marginBottom: 12 }}
+          >
+            {dockerEnabled ? "Docker Enabled" : "Enable Docker"}
+          </VSCodeButton>
+
+          {dockerEnabled && (
+            <div>
+              <label
+                style={{ display: "block", marginBottom: 8, fontSize: "0.9em" }}
+              >
+                Select Languages:
+              </label>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLanguages.python}
+                    onChange={() => toggleLanguage("python")}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: "0.9em" }}>
+                    Python {supportedLanguages.includes('python') && '(configured)'}
+                  </span>
+                </label>
+                
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLanguages.java}
+                    onChange={() => toggleLanguage("java")}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: "0.9em" }}>
+                    Java {supportedLanguages.includes('java') && '(configured)'}
+                  </span>
+                </label>
+                
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedLanguages.typescript}
+                    onChange={() => toggleLanguage("typescript")}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: "0.9em" }}>
+                    TypeScript {supportedLanguages.includes('typescript') && '(configured)'}
+                  </span>
+                </label>
+              </div>
+              
+              <div
+                style={{
+                  fontSize: "0.8em",
+                  color: "var(--vscode-descriptionForeground)",
+                  marginTop: 4,
+                }}
+              >
+                {dockerConfigured 
+                  ? "Changes will rebuild the Docker container with new language support"
+                  : "Selected languages will be available for code execution in Docker containers"
+                }
+              </div>
+              
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <VSCodeButton
+                  onClick={confirmDockerSetup}
+                  appearance="primary"
+                  disabled={Object.values(selectedLanguages).every(selected => !selected)}
+                >
+                  {dockerConfigured ? "Update Docker Setup" : "Confirm Docker Setup"}
+                </VSCodeButton>
+              </div>
+              
+              {dockerConfigured && containerExists && (
+                <div style={{ 
+                  fontSize: "0.8em", 
+                  color: "var(--vscode-inputValidation-infoForeground)",
+                  marginTop: 8,
+                  padding: 8,
+                  backgroundColor: "var(--vscode-inputValidation-infoBackground)",
+                  borderRadius: 4
+                }}>
+                  Container ready for execution
+                </div>
+              )}
+            </div>
+          )}
+          
+          {dockerConfigured && (
+            <div
+              style={{
+                fontSize: "0.8em",
+                color: "var(--vscode-inputValidation-infoForeground)",
+                backgroundColor: "var(--vscode-inputValidation-infoBackground)",
+                border: "1px solid var(--vscode-inputValidation-infoBorder)",
+                padding: 8,
+                borderRadius: 4,
+                marginTop: 8,
+              }}
+            >
+              Docker configuration completed successfully
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderLoadingPage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>Connecting to Network</h3>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid var(--vscode-widget-border)",
+          padding: 24,
+          borderRadius: 4,
+          textAlign: "center",
+          backgroundColor: "var(--vscode-editor-background)",
+        }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <div
+            style={{
+              width: "40px",
+              height: "40px",
+              border: "3px solid var(--vscode-widget-border)",
+              borderTop: "3px solid var(--vscode-button-background)",
+              borderRadius: "50%",
+              animation: "spin 1s linear infinite",
+              margin: "0 auto 16px",
+            }}
+          />
+          <h4 style={{ margin: "0 0 8px 0", color: "var(--vscode-foreground)" }}>
+            Establishing P2P Connection
+          </h4>
+          <p style={{ margin: 0, fontSize: "0.9em", color: "var(--vscode-descriptionForeground)" }}>
+            Connecting to the Polycode network...
+          </p>
+        </div>
+
+        <div
+          style={{
+            fontSize: "0.8em",
+            color: "var(--vscode-descriptionForeground)",
+            fontStyle: "italic",
+          }}
+        >
+          This may take a few moments
+        </div>
+      </div>
+
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+    </div>
+  );
+
+  const renderSetupPage = () => (
+    <div style={{ fontFamily: "var(--vscode-font-family)", padding: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+        <h3 style={{ margin: 0 }}>Setup Required</h3>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid var(--vscode-widget-border)",
+          padding: 16,
+          borderRadius: 4,
+          backgroundColor: "var(--vscode-inputValidation-warningBackground)",
+          borderColor: "var(--vscode-inputValidation-warningBorder)",
+        }}
+      >
+        <h4 style={{ margin: "0 0 8px 0", color: "var(--vscode-inputValidation-warningForeground)" }}>
+          ⚠️ Git Repository Not Found
+        </h4>
+        <p style={{ margin: "0 0 16px 0", fontSize: "0.9em", color: "var(--vscode-inputValidation-warningForeground)" }}>
+          This workspace doesn't contain a git repository. Polycode requires git for collaborative features.
+        </p>
+        
+        {/* GitHub URL Input */}
+        <div style={{ marginBottom: 16 }}>
+          <label
+            style={{ display: "block", marginBottom: 4, fontSize: "0.9em", fontWeight: "bold" }}
+          >
+            GitHub Repository URL:
+          </label>
+          <VSCodeTextField
+            value={githubUrl}
+            onInput={(e: any) => setGithubUrl(e.target.value)}
+            placeholder="https://github.com/username/repository.git"
+            style={{ width: "100%" }}
+          />
+          <div
+            style={{
+              fontSize: "0.8em",
+              color: "var(--vscode-descriptionForeground)",
+              marginTop: 4,
+            }}
+          >
+            Enter the GitHub repository URL to clone and set up this workspace
+          </div>
+        </div>
+
+
+        {/* Confirm Button */}
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <VSCodeButton
+            onClick={confirmSetup}
+            appearance="primary"
+            disabled={!githubUrl.trim()}
+          >
+            Confirm Setup
           </VSCodeButton>
         </div>
       </div>
     </div>
   );
 
-  return currentPage === "main"
+  return currentPage === "loading"
+    ? renderLoadingPage()
+    : currentPage === "main"
     ? renderMainPage()
     : currentPage === "save"
     ? renderSavePage()
-    : renderSettingsPage();
+    : currentPage === "settings"
+    ? renderSettingsPage()
+    : renderSetupPage();
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

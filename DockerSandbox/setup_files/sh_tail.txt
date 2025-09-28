@@ -1,0 +1,6 @@
+    *)
+        echo "Unsupported file type: $FILE_EXT"
+        echo "Supported types: .py, .java, .ts, .js"
+        exit 1
+        ;;
+esac

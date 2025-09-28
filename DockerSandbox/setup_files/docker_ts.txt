@@ -1,0 +1,2 @@
+# Install Node.js and TypeScript
+RUN apk add --no-cache nodejs npm && npm install -g typescript

@@ -1,0 +1,15 @@
+    "ts")
+        echo "Compiling TypeScript file..."
+        tsc "$1"
+        if [ $? -eq 0 ]; then
+            echo "Running compiled JavaScript file..."
+            node "${FILE_NAME}.js"
+        else
+            echo "TypeScript compilation failed!"
+            exit 1
+        fi
+        ;;
+    "js")
+        echo "Running JavaScript file..."
+        node "$1"
+        ;;

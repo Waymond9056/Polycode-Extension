@@ -186,6 +186,9 @@ export class P2PUser {
       this.startMessageCleanup();
 
       this.isStarted = true;
+      
+      // Notify that P2P is ready (even without peers)
+      console.log("🎉 P2P network is ready for connections");
     } catch (error) {
       console.error("Error starting P2P user:", error);
       throw error;
@@ -502,6 +505,10 @@ export class P2PUser {
 
   isConnected(): boolean {
     return this.isStarted && this.swarm.peers.length > 0;
+  }
+
+  isReady(): boolean {
+    return this.isStarted;
   }
 
   getClientId(): string {
